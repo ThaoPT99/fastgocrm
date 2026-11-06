@@ -54,6 +54,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const [pinValue, setPinValue] = useState("");
   const [currentCode, setCurrentCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [exportingIntake, setExportingIntake] = useState(false);
   const [previewRole, setPreviewRole] = useState<Role | "">("");
   const [previewScope, setPreviewScope] = useState("");
   const titleField = useRef<HTMLInputElement>(null);
@@ -206,6 +207,33 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const selectedCenter = centerId ? centersById.get(centerId) : undefined;
   const linkedCenterName = (entry: Entry) => centersById.get(entry.partnerId ?? undefined)?.title
     ?? intakeCenters.find((center) => center.id === entry.partnerId)?.title ?? entry.partner;
+  const intakeRows = view === "intake" ? rows.filter((entry) => entry.kind === "intake") : [];
+
+  async function exportIntake() {
+    setExportingIntake(true);
+    setError("");
+    try {
+      const { intakeWorkbook } = await import("./intake-export");
+      const workbook = await intakeWorkbook(intakeRows.map((entry) => {
+        const owner = people.get(entry.owner);
+        return { id: entry.id ?? "", title: entry.title, center: linkedCenterName(entry),
+          owner: owner?.name ?? entry.owner, team: owner?.team ?? "", date: entry.date,
+          status: entry.status, notes: entry.notes, checklist: entry.intakeChecklist };
+      }));
+      const url = URL.createObjectURL(workbook);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "fastgo-ho-so-tiep-nhan-" + today() + ".xlsx";
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch {
+      setError("Chưa xuất được file Excel. Hãy thử lại.");
+    } finally {
+      setExportingIntake(false);
+    }
+  }
   const day = today();
   const latestContact = new Map<string, Entry>();
   for (const activity of rows) {
@@ -442,6 +470,9 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         </section>}
         {data && kinds.includes(view as Kind) && (view !== "logwork" || draft) && <section className="panel">
           {view !== "logwork" && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder="Tìm theo tên, đối tác, trạng thái…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            {view === "intake" && <button disabled={exportingIntake || !intakeRows.length} onClick={exportIntake}>
+              {exportingIntake ? "Đang xuất Excel…" : "Xuất Excel"}
+            </button>}
             {!readOnly && intakeOnly && <button className="primary" disabled={busy || !intakeCenters.length} onClick={() => startEntry("intake", "")}>+ Tạo hồ sơ mới</button>}
             {!readOnly && !intakeOnly && view !== "task" && view !== "activity" && <button className="primary" disabled={busy || !visible.length} onClick={() => {
               const owner = people.has(data.email) ? data.email : visible[0].email;

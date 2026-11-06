@@ -2,9 +2,29 @@
   "name": "fastgo-crm",
   "version": "1.0.0",
   "private": true,
-  "engines": {"node": ">=22.13.0"},
-  "scripts": {"dev":"next dev","build":"next build","start":"next start","db:migrate":"node --env-file-if-exists=.env.local scripts/migrate.mjs"},
-  "dependencies": {"@libsql/client":"0.17.0","drizzle-orm":"0.45.2","next":"16.3.4","react":"19.2.6","react-dom":"19.2.6","zod":"^3.25.76"},
-  "devDependencies": {"@types/node":"22.19.19","@types/react":"19.2.14","@types/react-dom":"19.2.3","typescript":"5.9.3"},
-  "type":"module"
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/migrate.mjs"
+  },
+  "dependencies": {
+    "@libsql/client": "0.17.0",
+    "drizzle-orm": "0.45.2",
+    "next": "16.3.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "write-excel-file": "4.1.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "typescript": "5.9.3"
+  },
+  "type": "module"
 }

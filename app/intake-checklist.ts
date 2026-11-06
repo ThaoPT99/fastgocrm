@@ -60,10 +60,14 @@ export function receivedQuantity(item: Item, checklist: IntakeChecklist) {
   return checklist.received?.[item.id] ?? (checklist.checked.includes(item.id) ? item.required : 0);
 }
 
+export function appliesToChecklist(item: Item, checklist: IntakeChecklist) {
+  return (!item.optional || checklist.optional.includes(item.id)) &&
+    (!item.residence || checklist.residence === item.residence);
+}
+
 export function checklistProgress(checklist: IntakeChecklist | null | undefined) {
   const current = checklist ?? emptyChecklist;
-  const applicable = items.filter((item) => (!item.optional || current.optional.includes(item.id))
-    && (!item.residence || current.residence === item.residence));
+  const applicable = items.filter((item) => appliesToChecklist(item, current));
   const completed = applicable.filter((item) => receivedQuantity(item, current) >= item.required).length;
   const total = applicable.length + (current.residence ? 0 : 1);
   return { completed, total };
