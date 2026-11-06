@@ -72,6 +72,14 @@ summary { cursor:pointer; color:#3658ba }
 .kpiTargets div { padding:13px; background:#f0f5ff; border-radius:9px; display:grid; gap:5px }
 .kpiTargets span { font-size:13px; color:#55667e }
 .kpiTargets strong { font-size:27px; color:#2444a9 }
+.planForm,.planPriorities { display:grid; gap:12px }
+.planForm label { display:grid; gap:5px; min-width:0 }
+.planForm input,.planForm select { width:100%; min-width:0; min-height:44px }
+.planForm .formGrid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr)) }
+.planSource { min-width:0; border:1px solid #dfe5ee; border-radius:9px; display:grid; gap:10px; padding:12px }
+.planSource button { justify-self:start }
+.planPriorities { list-style:none; padding:0 }
+.planPriorities li { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px; border:1px solid #dfe5ee; border-radius:9px }
 .kpiGrid { grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)) }
 
 .logFilters,.logSummary { display:flex; flex-wrap:wrap; gap:8px; align-items:center }

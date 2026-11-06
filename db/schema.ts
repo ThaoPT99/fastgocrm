@@ -1,5 +1,6 @@
-import { integer, sqliteTable, text, index, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, index, primaryKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { IntakeChecklist } from "../app/intake-checklist";
+import type { KpiPlan } from "../app/kpi-plan";
 
 export const members = sqliteTable("members", {
   email: text().primaryKey(),
@@ -7,6 +8,14 @@ export const members = sqliteTable("members", {
   role: text({ enum: ["head", "lead", "sale", "intake"] }).notNull(),
   team: text().notNull(),
 });
+
+export const kpiPlans = sqliteTable("kpi_plans", {
+  owner: text().notNull().references(() => members.email),
+  quarter: text().notNull(),
+  version: integer().notNull(),
+  actual: text({ mode: "json" }).$type<KpiPlan["actual"]>().notNull(),
+  sources: text({ mode: "json" }).$type<KpiPlan["sources"]>().notNull(),
+}, (table) => [primaryKey({ columns: [table.owner, table.quarter] })]);
 
 export const records = sqliteTable("records", {
   id: text().primaryKey(),

@@ -1,4 +1,5 @@
 import { roles, type Role } from "./crm";
+import { personalTargets } from "./kpi-plan";
 
 const amountBands = [
   ["Dưới 20%", "0,5000"], ["20% – dưới 25%", "0,5625"], ["25% – dưới 30%", "0,6250"],
@@ -36,14 +37,15 @@ function Bands({ title, criterion, rows }: { title: string; criterion: string; r
 export default function KpiPolicy({ role }: { role: Exclude<Role, "intake"> }) {
   const sales = role === "sale";
   const lead = role === "lead";
+  const [d26, d41] = personalTargets(role);
   return <>
     <section className="panel policy">
       <div className="eyebrow">CHỈ TIÊU THEO QUÝ · 16/10/2026</div>
       <h2>{roles[role]}</h2>
       <div className="kpiTargets">
-        <div><span>D2-6 cá nhân</span><strong>{sales ? 31 : 25}</strong></div>
-        <div><span>D4-1 cá nhân</span><strong>{sales ? 62 : 50}</strong></div>
-        <div><span>Tổng hồ sơ đạt chuẩn cá nhân</span><strong>{sales ? 93 : 75}</strong></div>
+        <div><span>D2-6 cá nhân</span><strong>{d26}</strong></div>
+        <div><span>D4-1 cá nhân</span><strong>{d41}</strong></div>
+        <div><span>Tổng hồ sơ đạt chuẩn cá nhân</span><strong>{d26 + d41}</strong></div>
         {!sales && <div><span>{lead ? "Team đủ 3 Sales" : "Khối đủ 3 Team"}</span><strong>{lead ? "354" : "1.137"}</strong></div>}
       </div>
       {lead && <p>KPI Team = 75 + 93 × số Sales được giao KPI trong quý.</p>}

@@ -1,10 +1,11 @@
 import { and, asc, eq, inArray, isNull, like, ne, not, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getClient, getDb } from "../../../db";
-import { accessCodes, demoInstalls, members, records } from "../../../db/schema";
+import { accessCodes, demoInstalls, kpiPlans, members, records } from "../../../db/schema";
 import { accessCodeDigest, allowAccessAttempt, getCrmIdentity, validNewPin } from "../../crm-auth";
 import { checklistItemIds, checklistOptionalIds } from "../../intake-checklist";
 import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, statuses, today } from "../../crm";
+import { planInput } from "../../kpi-plan";
 
 export const dynamic = "force-dynamic";
 const json = (data: unknown, status = 200) => Response.json(data, {
@@ -37,6 +38,7 @@ const recordInput = z.object({
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
   (record.kind !== "logwork" || record.status !== "Cần hỗ trợ" || record.partner.length > 0));
 const command = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("kpi-plan"), plan: planInput }),
   z.object({ action: z.literal("start-sales-mode") }),
   z.object({ action: z.literal("passcode"), email: z.string().trim().toLowerCase().email(), operation: z.enum(["assign", "revoke"]), code: z.string().max(16).optional() }),
   z.object({ action: z.literal("change-passcode"), currentCode: z.string().max(100), newCode: z.string().max(16) }),
@@ -117,8 +119,10 @@ export async function GET(request: Request) {
   const visibleEmails = new Set(roster.map((member) => member.email));
   const scopedRows = rows.map((row) => row.performedBy && !visibleEmails.has(row.performedBy)
     ? { ...row, performedBy: "" } : row);
+  const plans = ctx.role !== "intake" && visibleEmails.size
+    ? await ctx.db.select().from(kpiPlans).where(inArray(kpiPlans.owner, [...visibleEmails])) : [];
   return json({ members: roster, records: scopedRows, role: ctx.role, admin: ctx.admin, ownerAdmin: ctx.ownerAdmin, salesMode: ctx.salesMode,
-    email: ctx.email, demoCleared, partnersLinked, followupsReady, codeEmails, intakeCenters });
+    email: ctx.email, demoCleared, partnersLinked, followupsReady, codeEmails, intakeCenters, plans });
 }
 
 async function clearDemo(db: ReturnType<typeof getDb>) {
@@ -160,6 +164,25 @@ export async function POST(request: Request) {
 
   const ctx = await context(request);
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
+  if (data.action === "kpi-plan") {
+    if (ctx.role === "intake" || !ctx.visible.some((person) => person.email === ctx.email)) {
+      return json({ error: "Bạn không có quyền lưu kế hoạch KPI." }, 403);
+    }
+    const { quarter, version, actual, sources } = data.plan;
+    const ids = sources.map((source) => source.centerId);
+    if (ids.length) {
+      const centers = await ctx.db.select({ id: records.id }).from(records)
+        .where(and(eq(records.kind, "partner"), eq(records.owner, ctx.email), inArray(records.id, ids)));
+      if (centers.length !== ids.length) return json({ error: "Hãy chọn trung tâm bạn đang phụ trách." }, 400);
+    }
+    const saved = version === 0
+      ? await ctx.db.insert(kpiPlans).values({ owner: ctx.email, quarter, version: 1, actual, sources })
+        .onConflictDoNothing().returning({ version: kpiPlans.version })
+      : await ctx.db.update(kpiPlans).set({ actual, sources, version: version + 1 })
+        .where(and(eq(kpiPlans.owner, ctx.email), eq(kpiPlans.quarter, quarter), eq(kpiPlans.version, version)))
+        .returning({ version: kpiPlans.version });
+    return saved.length ? json({ ok: true }) : json({ error: "Kế hoạch vừa thay đổi. Hãy tải lại trang trước khi lưu." }, 409);
+  }
   if (ctx.role === "intake" && data.action !== "change-passcode") {
     if (data.action !== "record") {
       return json({ error: "Nhân viên hồ sơ chỉ được tạo và chỉnh sửa hồ sơ tiếp nhận." }, 403);

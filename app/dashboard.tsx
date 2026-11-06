@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { categories, needsPartner, partnerActivityKinds, roles, statuses, today, type Kind, type Role } from "./crm";
 import KpiPolicy from "./kpi-policy";
+import KpiPlanner from "./kpi-planner";
+import type { KpiPlan } from "./kpi-plan";
 import PartnerFollowup from "./partner-followup";
 import IntakeChecklistFields from "./intake-checklist-fields";
 import SalesQueue from "./sales-queue";
@@ -10,12 +12,12 @@ import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
 type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
-type Data = { members: Member[]; records: Entry[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
-type View = "overview" | "workday" | "people" | "kpi" | Kind;
+type Data = { members: Member[]; records: Entry[]; plans: (KpiPlan & { owner: string })[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
+type View = "overview" | "workday" | "people" | "kpi" | "plan" | Kind;
 
-const icons: Record<View, string> = { workday: "✓", overview: "▦", kpi: "↗", partner: "◇", task: "✓", activity: "↗", meeting: "◷", intake: "▤", logwork: "▧", people: "◎" };
+const icons: Record<View, string> = { workday: "✓", overview: "▦", kpi: "↗", plan: "◫", partner: "◇", task: "✓", activity: "↗", meeting: "◷", intake: "▤", logwork: "▧", people: "◎" };
 const { logwork, ...otherCategories } = categories;
-const views = { workday: "Việc hôm nay", overview: "Tổng quan", logwork, kpi: "KPI & thưởng", ...otherCategories, people: "Nhân sự" };
+const views = { workday: "Việc hôm nay", overview: "Tổng quan", logwork, plan: "Kế hoạch KPI quý", kpi: "KPI & thưởng", ...otherCategories, people: "Nhân sự" };
 const navigation = (Object.keys(views) as View[]).filter((key) => key !== "task" && key !== "activity");
 const kinds = Object.keys(categories) as Kind[];
 const itemLabels: Record<Kind, string> = { partner: "trung tâm", task: "công việc", activity: "lượt liên hệ", meeting: "lịch hẹn", intake: "hồ sơ", logwork: "nhật ký" };
@@ -356,11 +358,16 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           </select></label>}
           {previewRole && <span>{!previewScope && (previewRole === "lead" || previewRole === "sale") ? "Thêm nhân sự hoặc nhóm thật để xem dữ liệu trong phạm vi này." : "Đang xem thử · Chỉ xem"}</span>}
         </section>}
+        {data && view === "plan" && <KpiPlanner key={viewRole + previewScope} day={day} members={visible} centers={centers}
+          plans={data.plans ?? []} email={data.email}
+          readOnly={readOnly} busy={busy} save={(plan) => void save({ action: "kpi-plan", plan }, "Đã lưu kế hoạch KPI.")}
+          open={openCenter} />}
         {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "workday" && <>
           <div className="toolbar">
             <b>{day.split("-").reverse().join("/")}</b>
             <div className="rowActions">
+              <button onClick={() => changeView("plan")}>Kế hoạch KPI quý</button>
               <button onClick={() => changeView("logwork")}>Nhật ký làm việc</button>
               {!readOnly && <button className="primary" onClick={() => { changeView("partner"); startEntry("partner", data.email); }}>+ Thêm trung tâm</button>}
             </div>
