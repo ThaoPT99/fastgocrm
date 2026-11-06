@@ -162,3 +162,17 @@ summary { cursor:pointer; color:#3658ba }
   .intakeItem .intakeOptional { min-height:44px; align-items:center }
   .intakeItem input[type=checkbox] { width:20px; height:20px }
 }
+
+.salesQueues { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start }
+.salesQueue { margin-bottom:0; min-width:0 }
+.salesQueue ul { list-style:none; padding:0; margin:0 }
+.salesQueue li { border-top:1px solid #e7ebf2 }
+.salesQueueItem { width:100%; min-height:50px; display:flex; align-items:center; justify-content:space-between; gap:8px; text-align:left; border:0; border-radius:0; padding:12px 16px }
+.salesQueueItem:hover { background:#f4f7ff }
+.salesQueueItem:focus-visible { outline-offset:-3px }
+.salesQueueItem > span:first-child { min-width:0; overflow-wrap:anywhere }
+.salesQueueItem small { display:block; margin-top:3px; color:#55667e }
+@media (max-width:740px) {
+  .salesQueues { grid-template-columns:minmax(0,1fr); gap:10px }
+  .salesQueueItem { padding:10px 12px }
+}
