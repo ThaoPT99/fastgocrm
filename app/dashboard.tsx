@@ -8,17 +8,36 @@ import type { KpiPlan } from "./kpi-plan";
 import PartnerFollowup from "./partner-followup";
 import IntakeChecklistFields from "./intake-checklist-fields";
 import SalesQueue from "./sales-queue";
+import WorkGuide from "./work-guide";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
 type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
 type Data = { members: Member[]; records: Entry[]; plans: (KpiPlan & { owner: string })[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
-type View = "overview" | "workday" | "people" | "kpi" | "plan" | Kind;
+type View = "overview" | "workday" | "people" | "kpi" | "plan" | "guide" | Kind;
 
-const icons: Record<View, string> = { workday: "✓", overview: "▦", kpi: "↗", plan: "◫", partner: "◇", task: "✓", activity: "↗", meeting: "◷", intake: "▤", logwork: "▧", people: "◎" };
+const icons: Record<View, string> = { workday: "✓", overview: "▦", kpi: "↗", plan: "◫", guide: "?", partner: "◇", task: "✓", activity: "↗", meeting: "◷", intake: "▤", logwork: "▧", people: "◎" };
 const { logwork, ...otherCategories } = categories;
-const views = { workday: "Việc hôm nay", overview: "Tổng quan", logwork, plan: "Kế hoạch KPI quý", kpi: "KPI & thưởng", ...otherCategories, people: "Nhân sự" };
-const navigation = (Object.keys(views) as View[]).filter((key) => key !== "task" && key !== "activity");
+const views = { workday: "Việc hôm nay", overview: "Tổng quan", logwork, plan: "Kế hoạch KPI quý", kpi: "KPI & thưởng", ...otherCategories, people: "Nhân sự", guide: "Hướng dẫn sử dụng" };
+const navGroups: { label: string; items: View[] }[] = [
+  { label: "LÀM VIỆC HẰNG NGÀY", items: ["workday", "partner", "meeting", "intake", "logwork"] },
+  { label: "KẾ HOẠCH & BÁO CÁO", items: ["plan", "overview", "kpi"] },
+  { label: "NỘI BỘ", items: ["people", "guide"] },
+];
+const descriptions: Record<View, string> = {
+  workday: "Xử lý liên hệ đến hạn, lịch hẹn và hồ sơ cần bổ sung trong phạm vi của bạn.",
+  partner: "Lưu đầu mối, ghi kết quả liên hệ và đặt bước tiếp theo tại từng trung tâm.",
+  meeting: "Theo dõi các buổi gặp đã lên lịch với trung tâm và cập nhật trạng thái sau buổi gặp.",
+  intake: "Theo dõi hồ sơ theo trung tâm và nhập số giấy tờ thực nhận trong checklist.",
+  logwork: "Xem hoạt động đã làm theo ngày và ghi thêm việc nội bộ khi cần.",
+  plan: "Tính mốc hồ sơ đạt chuẩn theo tuần, kiểm tra nguồn dự kiến và chọn đối tác cần ưu tiên.",
+  overview: "Theo dõi hoạt động và kết quả trong phạm vi bạn phụ trách.",
+  kpi: "Tra cứu chỉ tiêu hồ sơ và quy chế thưởng theo từng vai trò.",
+  people: "Tra cứu nhân sự, vai trò và nhóm phụ trách.",
+  guide: "Các bước làm việc trong CRM theo đúng vai trò đang mở.",
+  task: "Xem công việc đã ghi tại trung tâm.",
+  activity: "Xem lịch sử liên hệ với đối tác.",
+};
 const kinds = Object.keys(categories) as Kind[];
 const itemLabels: Record<Kind, string> = { partner: "trung tâm", task: "công việc", activity: "lượt liên hệ", meeting: "lịch hẹn", intake: "hồ sơ", logwork: "nhật ký" };
 const emptyMember: Member = { email: "", name: "", role: "sale", team: "" };
@@ -46,6 +65,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const [person, setPerson] = useState<Member>();
   const [query, setQuery] = useState("");
   const [centerId, setCenterId] = useState<string>();
+  const [centerOrigin, setCenterOrigin] = useState<View>();
   const [updatingCenter, setUpdatingCenter] = useState(false);
   const [followupFilter, setFollowupFilter] = useState<FollowupFilter>("all");
   const [logDate, setLogDate] = useState(today);
@@ -172,6 +192,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   function changeView(next: View) {
     setView(next);
     setCenterId(undefined);
+    setCenterOrigin(undefined);
     setUpdatingCenter(false);
     setFollowupFilter("all");
     setQuery("");
@@ -188,7 +209,8 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const viewRole = previewRole || data?.role;
   const intakeOnly = viewRole === "intake" || (!data && initialView === "intake");
   const showWorkday = viewRole === "sale" || (!data && initialView === "workday");
-  const view = intakeOnly ? "intake" : selectedView === "workday" && !showWorkday ? "overview" : selectedView;
+  const view = intakeOnly && selectedView !== "guide" ? "intake" : selectedView === "workday" && !showWorkday ? "overview" : selectedView;
+  const groups = intakeOnly ? [{ label: "TIẾP NHẬN", items: ["intake", "guide"] as View[] }] : navGroups;
   const readOnly = Boolean(previewRole);
   const managing = Boolean(data?.admin && !readOnly);
   const canSetCodes = !readOnly && data?.role === "head";
@@ -199,7 +221,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   });
 
   function changePreview(role: Role | "", target = "") {
-    changeView(role === "sale" ? "workday" : view);
+    changeView(role === "sale" ? "workday" : view === "intake" && intakeOnly ? "overview" : view);
     setLogTeam("");
     setPreviewRole(role);
     setPreviewScope(target);
@@ -263,6 +285,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
 
   function openCenter(id: string | undefined, update = false) {
     changeView("partner");
+    if (view !== "partner") setCenterOrigin(view);
     setCenterId(id);
     setUpdatingCenter(update);
   }
@@ -307,9 +330,11 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   return <div className="shell">
     <aside>
       <div className="brand"><b>F</b><div>Fastgo <strong>CRM</strong><small>KINH DOANH B2B</small></div></div>
-      <span className="navLabel">KHÔNG GIAN LÀM VIỆC</span>
-      <nav aria-label="Điều hướng chính">{(intakeOnly ? ["intake" as const] : navigation.filter((key) => key !== "workday" || showWorkday)).map((key) =>
-        <button key={key} aria-current={key === view ? "page" : undefined} onClick={() => changeView(key)}><span>{icons[key]}</span>{views[key]}</button>)}</nav>
+      <nav className="workspaceNav" aria-label="Điều hướng chính">{groups.map((group) =>
+        <div className="navGroup" key={group.label}><span className="navLabel">{group.label}</span>
+          {group.items.filter((key) => key !== "workday" || showWorkday).map((key) =>
+            <button key={key} aria-current={key === view ? "page" : undefined} onClick={() => changeView(key)}><span aria-hidden="true">{icons[key]}</span>{views[key]}</button>)}
+        </div>)}</nav>
       <div className="sidebarFoot"><i /> Nội bộ Fastgo</div>
     </aside>
     <main>
@@ -318,7 +343,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
       </>}<button className="textButton" disabled={busy} onClick={signOutWithCode}>Đăng xuất</button></div></header>
       <div className="content">
         <div className="heading"><div><div className="eyebrow">FASTGO / VẬN HÀNH KINH DOANH</div>
-          <h1>{views[view]}</h1><p>{view === "workday" ? "Ưu tiên các việc đến hạn và theo dõi phần việc mình phụ trách." : view === "overview" ? "Theo dõi hoạt động, công việc và hiệu suất đội kinh doanh." : view === "people" ? "Danh sách nhân sự, vai trò và team phụ trách." : view === "kpi" ? "Chỉ tiêu hồ sơ và quy chế thưởng theo từng vai trò." : "Theo dõi và cập nhật dữ liệu trong phạm vi của bạn."}</p></div>
+          <h1>{views[view]}</h1><p>{descriptions[view]}</p></div>
           {viewRole && <span className="pill">{roles[viewRole]}</span>}
         </div>
         {error && <div className="notice error" role="alert">{error}</div>}
@@ -358,6 +383,13 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           </select></label>}
           {previewRole && <span>{!previewScope && (previewRole === "lead" || previewRole === "sale") ? "Thêm nhân sự hoặc nhóm thật để xem dữ liệu trong phạm vi này." : "Đang xem thử · Chỉ xem"}</span>}
         </section>}
+        {view === "guide" && viewRole && <WorkGuide role={viewRole} go={changeView} />}
+        {data && (view === "workday" || view === "overview" || (intakeOnly && view === "intake")) && <section className="toolbar startHere">
+          <div><b>Mới sử dụng CRM?</b> <span>{intakeOnly ? "Xem cách tạo hồ sơ và ghi số giấy tờ đã nhận."
+            : view === "workday" ? "Xem cách ghi liên hệ, đặt follow-up và lập kế hoạch quý."
+              : "Xem quy trình theo vai trò và cách rà kế hoạch của nhân sự."}</span></div>
+          <button onClick={() => changeView("guide")}>Xem hướng dẫn</button>
+        </section>}
         {data && view === "plan" && <KpiPlanner key={viewRole + previewScope} day={day} members={visible} centers={centers}
           plans={data.plans ?? []} email={data.email}
           readOnly={readOnly} busy={busy} save={(plan) => void save({ action: "kpi-plan", plan }, "Đã lưu kế hoạch KPI.")}
@@ -393,13 +425,13 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               return [{ id: entry.id!, title: entry.title, detail: linkedCenterName(entry) || "Chưa liên kết trung tâm",
                 badge: "Thiếu " + (total - completed) + " mục", urgent: true, open: () => openFromWorkday(entry) }];
             })} />
-            <SalesQueue title="Đối tác chưa đặt follow-up" empty="Mọi đối tác đều đã có lịch follow-up." items={centers
+            <SalesQueue title="Đối tác chưa đặt follow-up" empty={centers.length ? "Mọi đối tác đều đã có lịch follow-up." : "Chưa có trung tâm. Thêm trung tâm để bắt đầu theo dõi."} items={centers
               .filter((center) => !center.followupDate)
               .map((center) => {
                 const last = latestContact.get(center.id ?? "");
                 return { id: center.id!, title: center.title,
                   detail: last ? "Lần liên hệ gần nhất · " + last.date : "Chưa ghi nhận liên hệ",
-                  open: () => openCenter(center.id) };
+                  open: () => openCenter(center.id, !readOnly) };
               })} />
           </div>
         </>}
@@ -498,7 +530,10 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         </section>}
         {data && view === "partner" && selectedCenter && <section className="panel">
           <div className="sectionHead"><div><div className="eyebrow">HỒ SƠ TRUNG TÂM</div><h2 ref={centerHeading} tabIndex={-1}>{selectedCenter.title}</h2><p>{people.get(selectedCenter.owner)?.name} · {selectedCenter.status}</p></div>
-            <div className="rowActions"><button onClick={() => { setCenterId(undefined); setUpdatingCenter(false); }}>Đóng hồ sơ</button>
+            <div className="rowActions"><button onClick={() => {
+              if (centerOrigin) changeView(centerOrigin);
+              else { setCenterId(undefined); setUpdatingCenter(false); }
+            }}>{centerOrigin ? "Về " + views[centerOrigin] : "Đóng hồ sơ"}</button>
               {!readOnly && <button className="primary" disabled={busy || updatingCenter} onClick={() => { setDraft(undefined); setUpdatingCenter(true); }}>Cập nhật đối tác</button>}</div></div>
           <div className="currentFollowup"><b>Follow-up tiếp theo</b>
             {selectedCenter.followupDate ? <span>{selectedCenter.followupAction} · <span className={followupGroup(selectedCenter.followupDate, day) === "late" ? "pill danger" : "pill"}>{selectedCenter.followupDate}</span></span>

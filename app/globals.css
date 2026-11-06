@@ -17,6 +17,9 @@ nav { display:grid; gap:5px }
 nav button { display:flex; align-items:center; gap:11px; color:#d3dded; background:transparent; border:1px solid transparent; text-align:left; font-size:14px; min-height:42px }
 nav button span { display:inline-grid; width:18px; place-items:center; color:#a9bdff; font-size:18px }
 nav button[aria-current] { background:#263961; color:white; border-color:#354c7c }
+.workspaceNav { gap:15px }
+.navGroup { display:grid; gap:3px }
+.navGroup .navLabel { margin-bottom:3px }
 .sidebarFoot { margin:auto 10px 0; font-size:12px; color:#bdcce1; padding-top:24px }
 .sidebarFoot i { display:inline-block; width:7px; height:7px; margin-right:5px; border-radius:50%; background:#54d5a3 }
 .top { min-height:64px; display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px clamp(16px,4vw,44px); background:#fff; border-bottom:1px solid #dfe5ee; font-size:13px; color:#53647d }
@@ -80,6 +83,22 @@ summary { cursor:pointer; color:#3658ba }
 .planSource button { justify-self:start }
 .planPriorities { list-style:none; padding:0 }
 .planPriorities li { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; padding:10px; border:1px solid #dfe5ee; border-radius:9px }
+.startHere button { min-height:44px }
+.guideSteps { list-style:none; counter-reset:guide; margin:15px 0 0; padding:0; display:grid; gap:8px }
+.guideSteps li { counter-increment:guide; display:grid; grid-template-columns:32px minmax(0,1fr) auto; align-items:center; gap:12px; border:1px solid #dfe5ee; border-radius:10px; padding:12px }
+.guideSteps li::before { content:counter(guide); display:grid; place-items:center; width:32px; height:32px; border-radius:50%; background:#e9efff; color:#28469d; font-weight:750 }
+.guideSteps h3 { margin:0; font-size:15px }
+.guideSteps button { min-height:44px }
+.guideGlossary { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr)); gap:14px; margin-bottom:0 }
+.guideGlossary dt { font-weight:750 }
+.guideGlossary dd { margin:4px 0 0; color:#55667e }
+@media(max-width:740px) {
+  .workspaceNav { display:flex; gap:12px; padding-bottom:5px }
+  .navGroup { display:flex; flex:none; gap:3px }
+  .navGroup + .navGroup { border-left:1px solid #354c7c; padding-left:8px }
+  .guideSteps li { grid-template-columns:32px minmax(0,1fr); align-items:start }
+  .guideSteps button { grid-column:2; justify-self:start }
+}
 .kpiGrid { grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr)) }
 
 .logFilters,.logSummary { display:flex; flex-wrap:wrap; gap:8px; align-items:center }

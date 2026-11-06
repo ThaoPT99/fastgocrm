@@ -22,7 +22,7 @@ export default function PartnerFollowup({ nextAction, nextDate, busy, onSave, on
     channel: "Cuộc gọi", activity: "", result: "", nextAction: nextAction ?? "", nextDate: nextDate ?? "",
   });
   return <form className="form followupForm" onSubmit={(event) => { event.preventDefault(); onSave(value); }}>
-    <div className="wideField"><h2>Cập nhật đối tác</h2><p>Hoạt động được lưu vào lịch sử hôm nay. Lịch follow-up hiện tại được điền sẵn để bạn điều chỉnh khi cần.</p></div>
+    <div className="wideField"><h2>Cập nhật đối tác</h2><p>Ghi việc vừa làm và kết quả. CRM sẽ lưu vào lịch sử trung tâm và Nhật ký làm việc. Nếu cần liên hệ tiếp, ghi rõ việc cần làm và ngày thực hiện.</p></div>
     <label>Hình thức<select value={value.channel} onChange={(event) => setValue({ ...value, channel: event.target.value as FollowupUpdate["channel"] })}>
       {followupChannels.map((channel) => <option key={channel}>{channel}</option>)}
     </select></label>
@@ -33,7 +33,9 @@ export default function PartnerFollowup({ nextAction, nextDate, busy, onSave, on
     <label>Việc follow-up tiếp theo<input required={Boolean(value.nextDate)} maxLength={180} placeholder="Ví dụ Gửi bảng phí D2-6" value={value.nextAction}
       onChange={(event) => setValue({ ...value, nextAction: event.target.value })} /></label>
     <label>Ngày follow-up<input type="date" required={Boolean(value.nextAction.trim())} value={value.nextDate}
-      onChange={(event) => setValue({ ...value, nextDate: event.target.value })} /></label>
+      onChange={(event) => setValue({ ...value, nextDate: event.target.value })} />
+      {nextDate && <small>Đang điền ngày đã hẹn trước. Đổi ngày nếu bạn đã xử lý lần hẹn này.</small>}
+    </label>
     <div className="actions">
       {(value.nextAction || value.nextDate) && <button type="button" onClick={() => setValue({ ...value, nextAction: "", nextDate: "" })}>Bỏ lịch follow-up</button>}
       <button type="button" disabled={busy} onClick={onCancel}>Hủy</button>

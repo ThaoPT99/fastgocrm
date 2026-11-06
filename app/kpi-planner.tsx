@@ -97,6 +97,10 @@ function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save,
   }
 
   return <>
+    {editable && <section className="toolbar startHere">
+      <span><b>Cách lập kế hoạch.</b> Chọn quý, cập nhật số đã đạt và nguồn dự kiến, rồi xem phần thiếu nguồn và việc cần ưu tiên.</span>
+      <button type="button" onClick={() => document.getElementById("plan-inputs")?.focus()}>Đến phần nhập số liệu</button>
+    </section>}
     <section className="panel policy">
       <h2>Mức độ đủ nguồn</h2>
       {!saved && !dirty && <p>Chưa có kế hoạch đã lưu. Bảng dưới dùng chỉ tiêu cá nhân và tiến độ ban đầu bằng 0.</p>}
@@ -136,7 +140,7 @@ function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save,
       </table></div>
     </section>}
     <section className="panel policy">
-      <h2>{editable ? "Cập nhật số thực tế và nguồn" : "Nguồn dự kiến"}</h2>
+      <h2 id="plan-inputs" tabIndex={-1}>{editable ? "Cập nhật số thực tế và nguồn" : "Nguồn dự kiến"}</h2>
       <form className="planForm" onSubmit={(event) => { event.preventDefault(); if (editable && !busy) save(plan); }}>
         {editable && <><p>Nhập số hồ sơ đạt chuẩn đã đối soát theo từng loại. Khi hồ sơ từ một trung tâm đạt chuẩn, cộng vào thực tế và giảm số còn dự kiến ở nguồn đó.</p>
           <div className="formGrid">{countFields(plan.actual, (actual) => setPlan({ ...plan, actual }), "Đã đạt ")}</div></>}
