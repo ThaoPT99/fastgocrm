@@ -64,10 +64,7 @@ export function checklistProgress(checklist: IntakeChecklist | null | undefined)
   const current = checklist ?? emptyChecklist;
   const applicable = items.filter((item) => (!item.optional || current.optional.includes(item.id))
     && (!item.residence || current.residence === item.residence));
-  const missing = applicable.flatMap((item) => {
-    const shortage = item.required - receivedQuantity(item, current);
-    return shortage > 0 ? [{ id: item.id, label: item.label, shortage, unit: item.unit ?? "bản" }] : [];
-  });
+  const completed = applicable.filter((item) => receivedQuantity(item, current) >= item.required).length;
   const total = applicable.length + (current.residence ? 0 : 1);
-  return { completed: applicable.length - missing.length, total, missing, needsResidence: !current.residence };
+  return { completed, total };
 }

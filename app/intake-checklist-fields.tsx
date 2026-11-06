@@ -18,6 +18,7 @@ export default function IntakeChecklistFields({ value, onChange }: {
         {residenceChoices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
       </select>
     </label>
+    {!current.residence && <span className="pill danger">Chưa chọn giấy tờ cư trú</span>}
     {checklistGroups.map((group) => <fieldset key={group.title} className="intakeGroup">
       <legend>{group.title}</legend>
       {group.items.filter((item) => !item.residence || item.residence === current.residence).map((item) => {
