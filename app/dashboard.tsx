@@ -214,6 +214,10 @@ export default function Dashboard({ name }: { name: string }) {
     (view !== "partner" || followupFilter === "all" || followupGroup(entry.followupDate, day) === followupFilter) &&
     [entry.title, linkedCenterName(entry), entry.status, people.get(entry.owner)?.name].join(" ").toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi").trim()));
   if (view === "partner") filtered.sort((a, b) => (a.followupDate ?? "9999").localeCompare(b.followupDate ?? "9999"));
+  const intakeAlerts = view === "intake" ? filtered.flatMap((entry) => {
+    const progress = checklistProgress(entry.intakeChecklist);
+    return progress.completed < progress.total ? [{ entry, progress }] : [];
+  }) : [];
 
   function openCenter(id: string | undefined, update = false) {
     changeView("partner");
@@ -457,7 +461,8 @@ export default function Dashboard({ name }: { name: string }) {
             {draft.kind === "intake" && <IntakeChecklistFields value={draft.intakeChecklist} onChange={(value) => setDraft({ ...draft, intakeChecklist: value })} />}
             <div className="actions"><button type="button" onClick={() => setDraft(undefined)}>Hủy</button><button className="primary" disabled={busy}>{draft.kind === "intake" ? "Lưu hồ sơ" : "Lưu bản ghi"}</button></div>
           </form>}
-          {view !== "logwork" && <div className="tableWrap"><table><thead><tr><th>{view === "partner" ? "Trung tâm" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
+          {view !== "logwork" && <div className={view === "intake" ? "intakeLayout" : undefined}>
+            <div className="tableWrap"><table><thead><tr><th>{view === "partner" ? "Trung tâm" : view === "intake" ? "Hồ sơ học sinh" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
           {filtered.map((entry) => {
             const progress = entry.kind === "intake" ? checklistProgress(entry.intakeChecklist) : null;
             return <tr key={entry.id}><td>
@@ -466,16 +471,29 @@ export default function Dashboard({ name }: { name: string }) {
               needsPartner(entry.kind) ? <small>Chưa liên kết trung tâm{entry.partner && " · " + entry.partner}</small> : entry.partner && <small>{entry.partner}</small>}
             {entry.kind === "partner" && latestContact.has(entry.id ?? "") && <small>Lần cuối {activityWhen(latestContact.get(entry.id ?? "")!)} · {latestContact.get(entry.id ?? "")?.title}</small>}
             {entry.notes && <details><summary>Ghi chú</summary><div className="notes">{entry.notes}</div></details>}
-            {progress && <details className="intakeDetails"><summary>Checklist · {progress.completed}/{progress.total} mục đã kiểm</summary>
+            {progress && <details className="intakeDetails"><summary>Checklist · {progress.completed}/{progress.total} mục đủ số lượng</summary>
               <IntakeChecklistFields value={entry.intakeChecklist} /></details>}</td><td>{people.get(entry.owner)?.name}</td>
             <td>{view === "partner" ? entry.followupDate ? <><span className={followupGroup(entry.followupDate, day) === "late" ? "pill danger" : "pill"}>{entry.followupDate}</span><small>{entry.followupAction}</small></> : "Chưa đặt lịch" : entry.date}</td>
             <td><span className={overdue(entry) ? "pill danger" : "pill"}>{overdue(entry) ? "Quá hạn" : entry.status}</span></td>
             {!readOnly && <td className="rowActions">{view === "partner" && <button disabled={busy} onClick={() => openCenter(entry.id, true)}>Cập nhật đối tác</button>}
-              {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>{entry.kind === "intake" ? "Tick checklist" : "Sửa"}</button><button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button></>}
+              {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>{entry.kind === "intake" ? "Cập nhật số lượng" : "Sửa"}</button><button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button></>}
             </td>}</tr>;
           })}
           {!filtered.length && <tr><td colSpan={readOnly ? 4 : 5} className="empty">Chưa có bản ghi phù hợp.</td></tr>}
-          </tbody></table></div>}
+          </tbody></table></div>
+          {view === "intake" && <section className="intakeAlerts" aria-labelledby="intake-alert-title">
+            <div className="intakeChecklistHeading"><h2 id="intake-alert-title">Cảnh báo thiếu hồ sơ</h2><span className="pill danger">{intakeAlerts.length}</span></div>
+            {!intakeAlerts.length && <p>Không có hồ sơ thiếu trong danh sách này.</p>}
+            {intakeAlerts.map(({ entry, progress }) => <details key={entry.id} className="intakeAlert">
+              <summary><b>{entry.title}</b><small>{progress.total - progress.completed} mục cần bổ sung</small></summary>
+              <ul>
+                {progress.needsResidence && <li>Chưa chọn giấy tờ cư trú</li>}
+                {progress.missing.map((item) => <li key={item.id}>{item.label} · thiếu {item.shortage} {item.unit}</li>)}
+              </ul>
+              {!readOnly && <button className="textButton" disabled={busy} onClick={() => setDraft(entry)}>Cập nhật số lượng</button>}
+            </details>)}
+          </section>}
+          </div>}
         </section>}
       </div>
     </main>

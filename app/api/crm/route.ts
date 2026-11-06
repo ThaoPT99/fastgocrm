@@ -31,6 +31,7 @@ const recordInput = z.object({
     residence: z.enum(["", "household", "residence"]),
     optional: z.array(z.string().refine((id) => checklistOptionalIds.has(id))).max(checklistOptionalIds.size),
     checked: z.array(z.string().refine((id) => checklistItemIds.has(id))).max(checklistItemIds.size),
+    received: z.record(z.string().refine((id) => checklistItemIds.has(id)), z.number().int().min(0).max(999)).optional(),
   }).nullish(),
   notes: z.string().trim().max(4000),
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
