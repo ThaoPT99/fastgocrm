@@ -157,7 +157,19 @@ export async function POST(request: Request) {
   const ctx = await context(request);
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
   if (ctx.role === "intake" && data.action !== "change-passcode") {
-    return json({ error: "Nhân viên hồ sơ chỉ được xem hồ sơ tiếp nhận." }, 403);
+    if (data.action !== "record") {
+      return json({ error: "Nhân viên hồ sơ chỉ được chỉnh sửa hồ sơ tiếp nhận hiện có." }, 403);
+    }
+    const parsedRecord = recordInput.safeParse(data.record);
+    if (!parsedRecord.success) return json({ error: "Thông tin hồ sơ không hợp lệ." }, 400);
+    const { id, version, kind, title, date, status, notes, intakeChecklist } = parsedRecord.data;
+    if (kind !== "intake" || !id || !version) {
+      return json({ error: "Nhân viên hồ sơ chỉ được chỉnh sửa hồ sơ tiếp nhận hiện có." }, 403);
+    }
+    const updated = await ctx.db.update(records).set({ title, date, status, notes, intakeChecklist, version: version + 1 })
+      .where(and(eq(records.id, id), eq(records.kind, "intake"), eq(records.version, version)))
+      .returning({ id: records.id });
+    return updated.length ? json({ ok: true }) : json({ error: "Hồ sơ vừa thay đổi hoặc không còn tồn tại. Hãy tải lại trang." }, 409);
   }
   if (data.action === "passcode") {
     const member = ctx.visible.find((person) => person.email === data.email);

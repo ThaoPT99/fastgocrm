@@ -183,7 +183,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const viewRole = previewRole || data?.role;
   const intakeOnly = viewRole === "intake" || (!data && initialView === "intake");
   const view = intakeOnly ? "intake" : selectedView;
-  const readOnly = Boolean(previewRole) || intakeOnly;
+  const readOnly = Boolean(previewRole);
   const managing = Boolean(data?.admin && !readOnly);
   const canSetCodes = !readOnly && data?.role === "head";
   const visible = roster.filter((member) => {
@@ -440,7 +440,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         </section>}
         {data && kinds.includes(view as Kind) && (view !== "logwork" || draft) && <section className="panel">
           {view !== "logwork" && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder="Tìm theo tên, đối tác, trạng thái…" value={query} onChange={(e) => setQuery(e.target.value)} />
-            {!readOnly && view !== "task" && view !== "activity" && <button className="primary" disabled={busy || !visible.length} onClick={() => {
+            {!readOnly && !intakeOnly && view !== "task" && view !== "activity" && <button className="primary" disabled={busy || !visible.length} onClick={() => {
               const owner = people.has(data.email) ? data.email : visible[0].email;
               setUpdatingCenter(false);
               startEntry(view as Kind, owner);
@@ -450,13 +450,14 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               {followupFilters[key]} <b>{key === "all" ? centers.length : centers.filter((center) => followupGroup(center.followupDate, day) === key).length}</b>
             </button>)}
           </div>}
-          {!visible.length && !readOnly && <div className="empty"><p>Cần có nhân sự phụ trách trước khi thêm bản ghi.</p>{managing && <button onClick={() => { changeView("people"); setPerson(emptyMember); }}>Thêm nhân sự</button>}</div>}
+          {!visible.length && !readOnly && !intakeOnly && <div className="empty"><p>Cần có nhân sự phụ trách trước khi thêm bản ghi.</p>{managing && <button onClick={() => { changeView("people"); setPerson(emptyMember); }}>Thêm nhân sự</button>}</div>}
           {draft && <form className="form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save({ action: "record", record: draft }, "Đã lưu bản ghi."); }}>
             <label>{draft.kind === "logwork" ? draft.id && !draft.loggedAt ? "Việc tiếp theo" : "Hoạt động đã làm" : draft.kind === "partner" ? "Tên trung tâm" : "Tiêu đề"}<input ref={titleField} required maxLength={180} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
-            <label>Người phụ trách<select disabled={draft.kind === "logwork"} value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value, partnerId: undefined })}>{visible.map((member) => <option key={member.email} value={member.email}>{member.name}</option>)}</select></label>
+            <label>Người phụ trách<select disabled={draft.kind === "logwork" || intakeOnly} value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value, partnerId: undefined })}>{visible.map((member) => <option key={member.email} value={member.email}>{member.name}</option>)}</select></label>
             <label>Trạng thái<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>{statuses[draft.kind].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label>{draft.kind === "task" ? "Hạn xử lý" : "Ngày"}<input type="date" readOnly={draft.kind === "logwork"} required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
-            {needsPartner(draft.kind) ? <label>Trung tâm B2B
+            {intakeOnly ? <label>Trung tâm B2B<input value={linkedCenterName(draft)} readOnly /></label>
+            : needsPartner(draft.kind) ? <label>Trung tâm B2B
               <select required value={draft.partnerId ?? ""} onChange={(event) => setDraft({ ...draft, partnerId: event.target.value || undefined })}>
                 <option value="">Chọn trung tâm đã có</option>
                 {centers.filter((center) => center.owner === draft.owner).map((center) => <option key={center.id} value={center.id}>{center.title}</option>)}
@@ -485,7 +486,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             <td>{view === "partner" ? entry.followupDate ? <><span className={followupGroup(entry.followupDate, day) === "late" ? "pill danger" : "pill"}>{entry.followupDate}</span><small>{entry.followupAction}</small></> : "Chưa đặt lịch" : entry.date}</td>
             <td><span className={overdue(entry) ? "pill danger" : "pill"}>{overdue(entry) ? "Quá hạn" : entry.status}</span></td>
             {!readOnly && <td className="rowActions">{view === "partner" && <button disabled={busy} onClick={() => openCenter(entry.id, true)}>Cập nhật đối tác</button>}
-              {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>{entry.kind === "intake" ? "Cập nhật số lượng" : "Sửa"}</button><button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button></>}
+              {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>{entry.kind === "intake" ? "Cập nhật số lượng" : "Sửa"}</button>{!intakeOnly && <button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button>}</>}
             </td>}</tr>;
           })}
           {!filtered.length && <tr><td colSpan={readOnly ? 4 : 5} className="empty">Chưa có bản ghi phù hợp.</td></tr>}
