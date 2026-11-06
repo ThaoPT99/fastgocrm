@@ -1,4 +1,5 @@
 import { integer, sqliteTable, text, index, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import type { IntakeChecklist } from "../app/intake-checklist";
 
 export const members = sqliteTable("members", {
   email: text().primaryKey(),
@@ -20,6 +21,7 @@ export const records = sqliteTable("records", {
   followupAction: text("followup_action"),
   loggedAt: text("logged_at"),
   performedBy: text("performed_by"),
+  intakeChecklist: text("intake_checklist", { mode: "json" }).$type<IntakeChecklist>(),
   notes: text().notNull(),
   version: integer().notNull().default(1),
 }, (table) => [

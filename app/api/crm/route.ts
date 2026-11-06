@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getClient, getDb } from "../../../db";
 import { accessCodes, demoInstalls, members, records } from "../../../db/schema";
 import { accessCodeDigest, allowAccessAttempt, getCrmIdentity, validNewPin } from "../../crm-auth";
+import { checklistItemIds, checklistOptionalIds } from "../../intake-checklist";
 import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, statuses, today } from "../../crm";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,11 @@ const recordInput = z.object({
   date: z.string().date(),
   partner: z.string().trim().max(180),
   partnerId: z.string().uuid().nullish(),
+  intakeChecklist: z.object({
+    residence: z.enum(["", "household", "residence"]),
+    optional: z.array(z.string().refine((id) => checklistOptionalIds.has(id))).max(checklistOptionalIds.size),
+    checked: z.array(z.string().refine((id) => checklistItemIds.has(id))).max(checklistItemIds.size),
+  }).nullish(),
   notes: z.string().trim().max(4000),
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
   (record.kind !== "logwork" || record.status !== "Cần hỗ trợ" || record.partner.length > 0));
@@ -272,6 +278,7 @@ export async function POST(request: Request) {
   const input = recordInput.safeParse(data.record);
   if (!input.success) return json({ error: "Kiểm tra thông tin bắt buộc. Nếu cần hỗ trợ, hãy mô tả vướng mắc." }, 400);
   const { id, version, ...record } = input.data;
+  if (record.kind !== "intake") delete record.intakeChecklist;
   if (!permitted.includes(record.owner)) return json({ error: "Bạn không có quyền giao cho nhân sự này." }, 403);
   if (record.kind === "logwork" && record.owner !== ctx.email) {
     return json({ error: "Bạn chỉ có thể ghi hoặc sửa nhật ký của mình." }, 403);

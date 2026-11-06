@@ -4,9 +4,11 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { categories, needsPartner, partnerActivityKinds, roles, statuses, today, type Kind, type Role } from "./crm";
 import KpiPolicy from "./kpi-policy";
 import PartnerFollowup from "./partner-followup";
+import IntakeChecklistFields from "./intake-checklist-fields";
+import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
-type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null };
+type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
 type Data = { members: Member[]; records: Entry[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[] };
 type View = "overview" | "people" | "kpi" | Kind;
 
@@ -452,20 +454,26 @@ export default function Dashboard({ name }: { name: string }) {
               {!centers.some((center) => center.owner === draft.owner) && <small>Người phụ trách chưa có trung tâm. Hãy thêm trung tâm trong mục Đối tác B2B trước.</small>}
             </label> : <label>{draft.kind === "logwork" ? "Vướng mắc / cần hỗ trợ" : "Đầu mối liên hệ"}<input required={draft.kind === "logwork" && draft.status === "Cần hỗ trợ"} maxLength={180} value={draft.partner} onChange={(e) => setDraft({ ...draft, partner: e.target.value })} /></label>}
             <label>{draft.kind === "logwork" ? "Kết quả / ghi chú" : "Ghi chú"}<textarea maxLength={4000} rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></label>
-            <div className="actions"><button type="button" onClick={() => setDraft(undefined)}>Hủy</button><button className="primary" disabled={busy}>Lưu bản ghi</button></div>
+            {draft.kind === "intake" && <IntakeChecklistFields value={draft.intakeChecklist} onChange={(value) => setDraft({ ...draft, intakeChecklist: value })} />}
+            <div className="actions"><button type="button" onClick={() => setDraft(undefined)}>Hủy</button><button className="primary" disabled={busy}>{draft.kind === "intake" ? "Lưu hồ sơ" : "Lưu bản ghi"}</button></div>
           </form>}
           {view !== "logwork" && <div className="tableWrap"><table><thead><tr><th>{view === "partner" ? "Trung tâm" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
-          {filtered.map((entry) => <tr key={entry.id}><td>
+          {filtered.map((entry) => {
+            const progress = entry.kind === "intake" ? checklistProgress(entry.intakeChecklist) : null;
+            return <tr key={entry.id}><td>
             {entry.kind === "partner" ? <button className="textButton" onClick={() => openCenter(entry.id)}>{entry.title}</button> : <b>{entry.title}</b>}
             {entry.partnerId ? <small><button className="textButton" onClick={() => openCenter(entry.partnerId ?? undefined)}>{linkedCenterName(entry)}</button></small> :
               needsPartner(entry.kind) ? <small>Chưa liên kết trung tâm{entry.partner && " · " + entry.partner}</small> : entry.partner && <small>{entry.partner}</small>}
             {entry.kind === "partner" && latestContact.has(entry.id ?? "") && <small>Lần cuối {activityWhen(latestContact.get(entry.id ?? "")!)} · {latestContact.get(entry.id ?? "")?.title}</small>}
-            {entry.notes && <details><summary>Ghi chú</summary><div className="notes">{entry.notes}</div></details>}</td><td>{people.get(entry.owner)?.name}</td>
+            {entry.notes && <details><summary>Ghi chú</summary><div className="notes">{entry.notes}</div></details>}
+            {progress && <details className="intakeDetails"><summary>Checklist · {progress.completed}/{progress.total} mục đã kiểm</summary>
+              <IntakeChecklistFields value={entry.intakeChecklist} /></details>}</td><td>{people.get(entry.owner)?.name}</td>
             <td>{view === "partner" ? entry.followupDate ? <><span className={followupGroup(entry.followupDate, day) === "late" ? "pill danger" : "pill"}>{entry.followupDate}</span><small>{entry.followupAction}</small></> : "Chưa đặt lịch" : entry.date}</td>
             <td><span className={overdue(entry) ? "pill danger" : "pill"}>{overdue(entry) ? "Quá hạn" : entry.status}</span></td>
             {!readOnly && <td className="rowActions">{view === "partner" && <button disabled={busy} onClick={() => openCenter(entry.id, true)}>Cập nhật đối tác</button>}
-              {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>Sửa</button><button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button></>}
-            </td>}</tr>)}
+              {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>{entry.kind === "intake" ? "Tick checklist" : "Sửa"}</button><button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button></>}
+            </td>}</tr>;
+          })}
           {!filtered.length && <tr><td colSpan={readOnly ? 4 : 5} className="empty">Chưa có bản ghi phù hợp.</td></tr>}
           </tbody></table></div>}
         </section>}

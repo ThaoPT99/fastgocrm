@@ -102,3 +102,17 @@ summary { cursor:pointer; color:#3658ba }
 .accessCard h1,.accessCard p { margin:0 }
 .accessCard label { display:grid; gap:6px; font-weight:700 }
 .accessCard a { text-align:center; font-size:13px }
+
+.intakeChecklist { grid-column:1/-1; display:grid; gap:12px; margin:0; white-space:normal }
+.intakeDetails .intakeChecklist { margin-top:10px; padding:12px; border:1px solid #dfe5ee; border-radius:8px }
+.intakeChecklistHeading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:8px }
+.intakeChecklistHeading p { font-size:13px }
+.intakeResidence { display:grid; justify-self:start; gap:4px; font-size:13px; font-weight:700 }
+.intakeGroup { min-width:0; padding:8px 12px; border:1px solid #d8e0ee; border-radius:8px; background:#fff }
+.intakeGroup legend { padding:0 6px; font-weight:700 }
+.intakeItem { display:flex; gap:8px 16px; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:6px 0 }
+.intakeItem + .intakeItem { border-top:1px solid #eef1f7 }
+.intakeItem label { display:flex; align-items:flex-start; gap:8px; font-weight:400 }
+.intakeItem input { width:16px; height:16px; margin:2px 0 0; accent-color:#315bd6; flex:none }
+.intakeItem small { display:block; margin-top:3px; color:#55667e; font-size:12px }
+.intakeItem .intakeOptional { font-size:12px; color:#55667e }
