@@ -9,7 +9,7 @@ import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
 type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
-type Data = { members: Member[]; records: Entry[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[] };
+type Data = { members: Member[]; records: Entry[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
 type View = "overview" | "people" | "kpi" | Kind;
 
 const icons: Record<View, string> = { overview: "▦", kpi: "↗", partner: "◇", task: "✓", activity: "↗", meeting: "◷", intake: "▤", logwork: "▧", people: "◎" };
@@ -201,9 +201,11 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const people = new Map(visible.map((member) => [member.email, member]));
   const rows = (data?.records ?? []).filter((entry) => people.has(entry.owner));
   const centers = rows.filter((entry) => entry.kind === "partner");
+  const intakeCenters = data?.intakeCenters ?? [];
   const centersById = new Map(centers.map((entry) => [entry.id, entry]));
   const selectedCenter = centerId ? centersById.get(centerId) : undefined;
-  const linkedCenterName = (entry: Entry) => centersById.get(entry.partnerId ?? undefined)?.title ?? entry.partner;
+  const linkedCenterName = (entry: Entry) => centersById.get(entry.partnerId ?? undefined)?.title
+    ?? intakeCenters.find((center) => center.id === entry.partnerId)?.title ?? entry.partner;
   const day = today();
   const latestContact = new Map<string, Entry>();
   for (const activity of rows) {
@@ -440,6 +442,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         </section>}
         {data && kinds.includes(view as Kind) && (view !== "logwork" || draft) && <section className="panel">
           {view !== "logwork" && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder="Tìm theo tên, đối tác, trạng thái…" value={query} onChange={(e) => setQuery(e.target.value)} />
+            {!readOnly && intakeOnly && <button className="primary" disabled={busy || !intakeCenters.length} onClick={() => startEntry("intake", "")}>+ Tạo hồ sơ mới</button>}
             {!readOnly && !intakeOnly && view !== "task" && view !== "activity" && <button className="primary" disabled={busy || !visible.length} onClick={() => {
               const owner = people.has(data.email) ? data.email : visible[0].email;
               setUpdatingCenter(false);
@@ -451,12 +454,20 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             </button>)}
           </div>}
           {!visible.length && !readOnly && !intakeOnly && <div className="empty"><p>Cần có nhân sự phụ trách trước khi thêm bản ghi.</p>{managing && <button onClick={() => { changeView("people"); setPerson(emptyMember); }}>Thêm nhân sự</button>}</div>}
+          {intakeOnly && !readOnly && !intakeCenters.length && <p className="empty">Cần có trung tâm B2B trước khi tạo hồ sơ tiếp nhận.</p>}
           {draft && <form className="form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save({ action: "record", record: draft }, "Đã lưu bản ghi."); }}>
-            <label>{draft.kind === "logwork" ? draft.id && !draft.loggedAt ? "Việc tiếp theo" : "Hoạt động đã làm" : draft.kind === "partner" ? "Tên trung tâm" : "Tiêu đề"}<input ref={titleField} required maxLength={180} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
-            <label>Người phụ trách<select disabled={draft.kind === "logwork" || intakeOnly} value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value, partnerId: undefined })}>{visible.map((member) => <option key={member.email} value={member.email}>{member.name}</option>)}</select></label>
+            <label>{draft.kind === "logwork" ? draft.id && !draft.loggedAt ? "Việc tiếp theo" : "Hoạt động đã làm" : draft.kind === "partner" ? "Tên trung tâm" : draft.kind === "intake" ? "Tên học sinh / mã hồ sơ" : "Tiêu đề"}<input ref={titleField} required maxLength={180} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
+            <label>Người phụ trách<select disabled={draft.kind === "logwork" || intakeOnly} value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value, partnerId: undefined })}>{intakeOnly && <option value="">Theo trung tâm đã chọn</option>}{visible.map((member) => <option key={member.email} value={member.email}>{member.name}</option>)}</select></label>
             <label>Trạng thái<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>{statuses[draft.kind].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label>{draft.kind === "task" ? "Hạn xử lý" : "Ngày"}<input type="date" readOnly={draft.kind === "logwork"} required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
-            {intakeOnly ? <label>Trung tâm B2B<input value={linkedCenterName(draft)} readOnly /></label>
+            {intakeOnly ? <label>Trung tâm B2B{draft.id ? <input value={linkedCenterName(draft)} readOnly />
+              : <select required value={draft.partnerId ?? ""} onChange={(event) => {
+                const center = intakeCenters.find((item) => item.id === event.target.value);
+                setDraft({ ...draft, partnerId: center?.id, owner: center?.owner ?? "" });
+              }}>
+                <option value="">Chọn trung tâm đã có</option>
+                {intakeCenters.map((center) => <option key={center.id} value={center.id}>{center.title} · {people.get(center.owner)?.name}</option>)}
+              </select>}</label>
             : needsPartner(draft.kind) ? <label>Trung tâm B2B
               <select required value={draft.partnerId ?? ""} onChange={(event) => setDraft({ ...draft, partnerId: event.target.value || undefined })}>
                 <option value="">Chọn trung tâm đã có</option>

@@ -106,7 +106,11 @@ export async function GET(request: Request) {
   const demoCleared = ctx.admin && await hasInstall(ctx.db, demoCleanupKey);
   const partnersLinked = ctx.admin && await hasInstall(ctx.db, partnerLinkKey);
   const followupsReady = ctx.admin && await hasInstall(ctx.db, followupKey);
-  const intakeOwners = ctx.role === "intake" ? new Set(rows.map((row) => row.owner)) : null;
+  const intakeCenters = ctx.role === "intake"
+    ? await ctx.db.select({ id: records.id, title: records.title, owner: records.owner }).from(records)
+      .where(eq(records.kind, "partner")).orderBy(asc(records.title))
+    : [];
+  const intakeOwners = ctx.role === "intake" ? new Set([...rows, ...intakeCenters].map((row) => row.owner)) : null;
   const roster = intakeOwners ? ctx.visible.filter((member) => intakeOwners.has(member.email))
     : ctx.salesMode ? ctx.visible.map((member) => ({ ...member, role: "sale" })) : ctx.visible;
   const codeEmails = ctx.role === "head" ? (await ctx.db.select({ email: accessCodes.email }).from(accessCodes)).map((item) => item.email) : [];
@@ -114,7 +118,7 @@ export async function GET(request: Request) {
   const scopedRows = rows.map((row) => row.performedBy && !visibleEmails.has(row.performedBy)
     ? { ...row, performedBy: "" } : row);
   return json({ members: roster, records: scopedRows, role: ctx.role, admin: ctx.admin, ownerAdmin: ctx.ownerAdmin, salesMode: ctx.salesMode,
-    email: ctx.email, demoCleared, partnersLinked, followupsReady, codeEmails });
+    email: ctx.email, demoCleared, partnersLinked, followupsReady, codeEmails, intakeCenters });
 }
 
 async function clearDemo(db: ReturnType<typeof getDb>) {
@@ -158,14 +162,21 @@ export async function POST(request: Request) {
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
   if (ctx.role === "intake" && data.action !== "change-passcode") {
     if (data.action !== "record") {
-      return json({ error: "Nhân viên hồ sơ chỉ được chỉnh sửa hồ sơ tiếp nhận hiện có." }, 403);
+      return json({ error: "Nhân viên hồ sơ chỉ được tạo và chỉnh sửa hồ sơ tiếp nhận." }, 403);
     }
     const parsedRecord = recordInput.safeParse(data.record);
     if (!parsedRecord.success) return json({ error: "Thông tin hồ sơ không hợp lệ." }, 400);
-    const { id, version, kind, title, date, status, notes, intakeChecklist } = parsedRecord.data;
-    if (kind !== "intake" || !id || !version) {
-      return json({ error: "Nhân viên hồ sơ chỉ được chỉnh sửa hồ sơ tiếp nhận hiện có." }, 403);
+    const { id, version, kind, title, date, status, notes, intakeChecklist, partnerId } = parsedRecord.data;
+    if (kind !== "intake") return json({ error: "Nhân viên hồ sơ chỉ được tạo và chỉnh sửa hồ sơ tiếp nhận." }, 403);
+    if (!id) {
+      const center = partnerId ? await ctx.db.select({ owner: records.owner, title: records.title }).from(records)
+        .where(and(eq(records.id, partnerId), eq(records.kind, "partner"))).get() : null;
+      if (!center) return json({ error: "Hãy chọn một trung tâm B2B đã có." }, 400);
+      await ctx.db.insert(records).values({ id: crypto.randomUUID(), kind, title, date, status, notes, intakeChecklist,
+        owner: center.owner, partnerId, partner: center.title });
+      return json({ ok: true });
     }
+    if (!version) return json({ error: "Hãy tải lại hồ sơ trước khi cập nhật." }, 409);
     const updated = await ctx.db.update(records).set({ title, date, status, notes, intakeChecklist, version: version + 1 })
       .where(and(eq(records.id, id), eq(records.kind, "intake"), eq(records.version, version)))
       .returning({ id: records.id });
