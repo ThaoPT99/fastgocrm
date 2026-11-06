@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `records_daily_log_idx` ON `records` (`owner`,`date`) WHERE "records"."kind" = 'logwork';
