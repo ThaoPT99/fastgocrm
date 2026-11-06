@@ -119,3 +119,46 @@ summary { cursor:pointer; color:#3658ba }
 
 .intakeQuantity,.intakeQuantity label { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13px }
 .intakeQuantity input[type=number] { width:72px; height:auto; margin:0 }
+
+@media (max-width:740px) {
+  .shell { grid-template-columns:minmax(0,1fr) }
+  .shell > aside,.shell > main { min-width:0 }
+  .shell > aside { padding:12px 14px; gap:10px }
+  .shell nav { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; overflow:visible }
+  .shell nav button { min-height:44px; padding:6px 8px; gap:6px; white-space:normal; line-height:1.25 }
+  .shell nav button span { flex:0 0 16px; width:16px }
+  .top { gap:4px 12px; padding:8px 14px }
+  .top > div { min-width:0; overflow-wrap:anywhere }
+  .top .textButton,.top a { display:inline-flex; align-items:center; min-height:44px }
+  .content { padding:14px 12px 24px }
+  .heading { margin-bottom:14px; gap:8px }
+  .sectionHead { padding:12px }
+  .metrics { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px }
+  .metric { padding:12px }
+  .form { grid-template-columns:minmax(0,1fr); padding:14px 12px; gap:12px }
+  .form label,.toolbar label,.intakeChecklist,.intakeResidence,.intakeGroup { min-width:0 }
+  .form input:not([type=checkbox]),.form select,.form textarea,.search,.toolbar select,.accessCard input { max-width:100%; min-height:44px; font-size:16px }
+  .search { width:100% }
+  .sectionHead > button,.form .actions button,.toolbar button,.accessCard button,.followupFilters button { min-height:44px }
+  .actions { flex-wrap:wrap }
+  .toolbar select { margin:4px 0 0; display:block }
+  .followupFilters,.currentFollowup,.centerTimeline { padding-left:12px; padding-right:12px }
+  .mobileCards { padding:0 10px 10px; overflow:visible }
+  .mobileCards table,.mobileCards tbody { display:block; width:100%; min-width:0 }
+  .mobileCards thead { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap }
+  .mobileCards tr { display:block; border:1px solid #dfe5ee; border-radius:10px; overflow:hidden }
+  .mobileCards tr + tr { margin-top:8px }
+  .mobileCards td { display:block; min-width:0; padding:8px 12px; overflow-wrap:anywhere }
+  .mobileCards td:first-child { font-size:15px; border-top:0 }
+  .mobileCards td[data-label]::before { content:attr(data-label); display:block; color:#55667e; font-size:11px; font-weight:700; margin-bottom:3px }
+  .mobileCards td.rowActions { display:flex; flex-wrap:wrap; white-space:normal; gap:6px }
+  .mobileCards .rowActions button { min-height:44px; margin:0 }
+  .mobileCards td.rowActions:empty { display:none }
+  .mobileCards summary { min-height:44px; padding:8px 0 }
+  .intakeDetails .intakeChecklist { padding:8px }
+  .intakeItem { display:grid; grid-template-columns:minmax(0,1fr); gap:5px }
+  .intakeQuantity { justify-content:space-between }
+  .intakeQuantity input[type=number] { min-height:44px; font-size:16px }
+  .intakeItem .intakeOptional { min-height:44px; align-items:center }
+  .intakeItem input[type=checkbox] { width:20px; height:20px }
+}

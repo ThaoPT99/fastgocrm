@@ -342,14 +342,14 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             <p>Thêm tài khoản của bạn vào Nhân sự để ghi nhật ký Trưởng khối.</p>
             <button onClick={() => { changeView("people"); setPerson({ email: data.email, name, role: "head", team: "" }); }}>Thêm hồ sơ của tôi</button>
           </div>}
-          <div className="tableWrap"><table><thead><tr><th>Nhân sự</th><th>Hoạt động trong ngày</th>{showLogActions && <th>Thao tác</th>}</tr></thead><tbody>
+          <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>Nhân sự</th><th>Hoạt động trong ngày</th>{showLogActions && <th>Thao tác</th>}</tr></thead><tbody>
             {logMembers.map((member) => {
               const activities = (dailyActivities.get(member.email) ?? [])
                 .sort((a, b) => (b.loggedAt ?? b.date).localeCompare(a.loggedAt ?? a.date));
               const ownLog = showLogActions && member.email === data.email;
               return <tr key={member.email}>
                 <td><b>{member.name}</b><small>{roles[member.role]}{member.team && " · " + member.team}</small></td>
-                <td>{activities.length ? activities.map((entry) => {
+                <td data-label="Hoạt động trong ngày">{activities.length ? activities.map((entry) => {
                   const contact = entry.kind === "activity";
                   const time = entry.loggedAt && today(new Date(entry.loggedAt)) === logDate ? timeLabel.format(new Date(entry.loggedAt)) : "";
                   return <div className="logContact" key={entry.id}>
@@ -364,7 +364,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
                     {!contact && ownLog && <small><button className="textButton" disabled={busy} onClick={() => setDraft(entry)}>Sửa hoạt động</button></small>}
                   </div>;
                 }) : <span className="pill">Chưa ghi hoạt động</span>}</td>
-                {showLogActions && <td>{ownLog && <button disabled={busy} onClick={() => setDraft({
+                {showLogActions && <td className="rowActions">{ownLog && <button disabled={busy} onClick={() => setDraft({
                   kind: "logwork", owner: member.email, date: logDate, title: "", notes: "", partner: "", status: "Đã cập nhật",
                 })}>+ Ghi hoạt động</button>}</td>}
               </tr>;
@@ -375,12 +375,12 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         {data && view === "overview" && <>
           <div className="metrics">{stats.map((stat) => <button key={stat.label} className="metric" onClick={() => { changeView(stat.view); if ("filter" in stat) setFollowupFilter(stat.filter); }}><span className="metricIcon">{icons[stat.view]}</span><span>{stat.label}</span><strong>{stat.value}</strong></button>)}</div>
           <section className="panel"><div className="sectionHead"><div><h2>Hiệu suất kinh doanh</h2><p>Tổng hợp dữ liệu trong phạm vi bạn được xem</p></div></div>
-          <div className="tableWrap"><table><thead><tr><th>Nhân sự / Team</th><th>Công việc hoàn tất</th><th>Lượt liên hệ</th><th>Hồ sơ hoàn tất</th></tr></thead><tbody>
+          <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>Nhân sự / Team</th><th>Công việc hoàn tất</th><th>Lượt liên hệ</th><th>Hồ sơ hoàn tất</th></tr></thead><tbody>
             {teams.map((team) => {
               const teamMembers = visible.filter((member) => member.team === team);
-              return <tr key={team} className="teamRow"><td>{team}</td><td>{teamMembers.reduce((sum, member) => sum + (counts.get(member.email)?.tasks ?? 0), 0)}</td><td>{teamMembers.reduce((sum, member) => sum + (counts.get(member.email)?.contacts ?? 0), 0)}</td><td>{teamMembers.reduce((sum, member) => sum + (counts.get(member.email)?.intakes ?? 0), 0)}</td></tr>;
+              return <tr key={team} className="teamRow"><td>{team}</td><td data-label="Công việc hoàn tất">{teamMembers.reduce((sum, member) => sum + (counts.get(member.email)?.tasks ?? 0), 0)}</td><td data-label="Lượt liên hệ">{teamMembers.reduce((sum, member) => sum + (counts.get(member.email)?.contacts ?? 0), 0)}</td><td data-label="Hồ sơ hoàn tất">{teamMembers.reduce((sum, member) => sum + (counts.get(member.email)?.intakes ?? 0), 0)}</td></tr>;
             })}
-            {visible.map((member) => <tr key={member.email}><td>{member.name}<small>{member.team || roles[member.role]}</small></td><td>{counts.get(member.email)?.tasks ?? 0}</td><td>{counts.get(member.email)?.contacts ?? 0}</td><td>{counts.get(member.email)?.intakes ?? 0}</td></tr>)}
+            {visible.map((member) => <tr key={member.email}><td>{member.name}<small>{member.team || roles[member.role]}</small></td><td data-label="Công việc hoàn tất">{counts.get(member.email)?.tasks ?? 0}</td><td data-label="Lượt liên hệ">{counts.get(member.email)?.contacts ?? 0}</td><td data-label="Hồ sơ hoàn tất">{counts.get(member.email)?.intakes ?? 0}</td></tr>)}
             {!visible.length && <tr><td colSpan={4} className="empty">Chưa có nhân sự trong phạm vi này.</td></tr>}
           </tbody></table></div></section>
           <section className="panel"><div className="sectionHead"><h2>Follow-up quá hạn</h2></div>{lateCenters.length ? <ul className="alerts">{lateCenters.map((center) => <li key={center.id}><button className="textButton" onClick={() => openCenter(center.id)}>{center.title}</button> · {center.followupAction} <span className="pill danger">{center.followupDate}</span></li>)}</ul> : <p className="empty">Không có trung tâm trễ hẹn follow-up.</p>}</section>
@@ -402,8 +402,8 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             <label>Team<input required={person.role === "lead" || person.role === "sale"} maxLength={60} placeholder="Ví dụ Team 01" value={person.team} onChange={(e) => setPerson({ ...person, team: e.target.value })} /></label>
             <div className="actions"><button type="button" onClick={() => setPerson(undefined)}>Hủy</button><button className="primary" disabled={busy}>Lưu nhân sự</button></div>
           </form>}
-          <div className="tableWrap"><table><thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Team</th>{canSetCodes && <th>Thao tác</th>}</tr></thead><tbody>
-          {visible.map((member) => <tr key={member.email}><td><b>{member.name}</b></td><td>{member.email}</td><td>{roles[member.role]}</td><td>{member.team || "—"}</td>{canSetCodes && <td className="rowActions">
+          <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Team</th>{canSetCodes && <th>Thao tác</th>}</tr></thead><tbody>
+          {visible.map((member) => <tr key={member.email}><td><b>{member.name}</b></td><td data-label="Email">{member.email}</td><td data-label="Vai trò">{roles[member.role]}</td><td data-label="Nhóm">{member.team || "—"}</td>{canSetCodes && <td className="rowActions">
             {managing && <button disabled={busy} onClick={() => { closePinForm(); setPerson(member); }}>Đổi vai trò</button>}
             {(managing || member.role !== "head") && <>
               <button disabled={busy} onClick={() => { closePinForm(); setPerson(undefined); setPinTarget(member); }}>
@@ -480,7 +480,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             {draft.kind === "intake" && <IntakeChecklistFields value={draft.intakeChecklist} onChange={(value) => setDraft({ ...draft, intakeChecklist: value })} />}
             <div className="actions"><button type="button" onClick={() => setDraft(undefined)}>Hủy</button><button className="primary" disabled={busy}>{draft.kind === "intake" ? "Lưu hồ sơ" : "Lưu bản ghi"}</button></div>
           </form>}
-          {view !== "logwork" && <div className="tableWrap"><table><thead><tr><th>{view === "partner" ? "Trung tâm" : view === "intake" ? "Hồ sơ học sinh" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
+          {view !== "logwork" && <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>{view === "partner" ? "Trung tâm" : view === "intake" ? "Hồ sơ học sinh" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
           {filtered.map((entry) => {
             const progress = intakeProgress.get(entry);
             const missing = progress ? progress.total - progress.completed : 0;
@@ -493,9 +493,9 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             {progress && <details className="intakeDetails"><summary>Checklist · {progress.completed}/{progress.total} mục đủ số lượng
               {missing > 0 && <> <span className="pill danger">Thiếu {missing} mục</span></>}
             </summary>
-              <IntakeChecklistFields value={entry.intakeChecklist} /></details>}</td><td>{people.get(entry.owner)?.name}</td>
-            <td>{view === "partner" ? entry.followupDate ? <><span className={followupGroup(entry.followupDate, day) === "late" ? "pill danger" : "pill"}>{entry.followupDate}</span><small>{entry.followupAction}</small></> : "Chưa đặt lịch" : entry.date}</td>
-            <td><span className={overdue(entry) ? "pill danger" : "pill"}>{overdue(entry) ? "Quá hạn" : entry.status}</span></td>
+              <IntakeChecklistFields value={entry.intakeChecklist} /></details>}</td><td data-label="Phụ trách">{people.get(entry.owner)?.name}</td>
+            <td data-label={view === "partner" ? "Follow-up" : "Ngày"}>{view === "partner" ? entry.followupDate ? <><span className={followupGroup(entry.followupDate, day) === "late" ? "pill danger" : "pill"}>{entry.followupDate}</span><small>{entry.followupAction}</small></> : "Chưa đặt lịch" : entry.date}</td>
+            <td data-label="Trạng thái"><span className={overdue(entry) ? "pill danger" : "pill"}>{overdue(entry) ? "Quá hạn" : entry.status}</span></td>
             {!readOnly && <td className="rowActions">{view === "partner" && <button disabled={busy} onClick={() => openCenter(entry.id, true)}>Cập nhật đối tác</button>}
               {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>{entry.kind === "intake" ? "Cập nhật số lượng" : "Sửa"}</button>{!intakeOnly && <button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button>}</>}
             </td>}</tr>;
