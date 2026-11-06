@@ -4,7 +4,7 @@ import type { IntakeChecklist } from "../app/intake-checklist";
 export const members = sqliteTable("members", {
   email: text().primaryKey(),
   name: text().notNull(),
-  role: text({ enum: ["head", "lead", "sale"] }).notNull(),
+  role: text({ enum: ["head", "lead", "sale", "intake"] }).notNull(),
   team: text().notNull(),
 });
 

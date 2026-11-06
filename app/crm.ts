@@ -18,7 +18,7 @@ export const statuses = {
   logwork: ["Đã cập nhật", "Cần hỗ trợ"],
 } as const;
 
-export const roles = { head: "Trưởng khối", lead: "Trưởng nhóm", sale: "Sales" } as const;
+export const roles = { head: "Trưởng khối", lead: "Trưởng nhóm", sale: "Sales", intake: "Nhân viên hồ sơ" } as const;
 export type Kind = keyof typeof categories;
 export type Role = keyof typeof roles;
 export const partnerActivityKinds = ["task", "activity", "meeting", "intake"] as const;

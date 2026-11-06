@@ -36,9 +36,9 @@ function followupGroup(date: Entry["followupDate"], day: string): Exclude<Follow
   return date < day ? "late" : date === day ? "today" : "upcoming";
 }
 
-export default function Dashboard({ name }: { name: string }) {
+export default function Dashboard({ name, initialView }: { name: string; initialView: "overview" | "intake" }) {
   const [data, setData] = useState<Data>();
-  const [view, setView] = useState<View>("overview");
+  const [selectedView, setView] = useState<View>(initialView);
   const [draft, setDraft] = useState<Entry>();
   const [person, setPerson] = useState<Member>();
   const [query, setQuery] = useState("");
@@ -180,10 +180,12 @@ export default function Dashboard({ name }: { name: string }) {
   const roster = data?.members ?? [];
   const previewTeams = [...new Set(roster.map((member) => member.team).filter(Boolean))];
   const previewSales = roster.filter((member) => member.role === "sale");
-  const readOnly = Boolean(previewRole);
+  const viewRole = previewRole || data?.role;
+  const intakeOnly = viewRole === "intake" || (!data && initialView === "intake");
+  const view = intakeOnly ? "intake" : selectedView;
+  const readOnly = Boolean(previewRole) || intakeOnly;
   const managing = Boolean(data?.admin && !readOnly);
   const canSetCodes = !readOnly && data?.role === "head";
-  const viewRole = previewRole || data?.role;
   const visible = roster.filter((member) => {
     if (previewRole === "lead") return Boolean(previewScope) && member.team === previewScope;
     if (previewRole === "sale") return member.email === previewScope && member.role === "sale";
@@ -266,7 +268,7 @@ export default function Dashboard({ name }: { name: string }) {
     <aside>
       <div className="brand"><b>F</b><div>Fastgo <strong>CRM</strong><small>KINH DOANH B2B</small></div></div>
       <span className="navLabel">KHÔNG GIAN LÀM VIỆC</span>
-      <nav aria-label="Điều hướng chính">{navigation.map((key) =>
+      <nav aria-label="Điều hướng chính">{(intakeOnly ? ["intake" as const] : navigation).map((key) =>
         <button key={key} aria-current={key === view ? "page" : undefined} onClick={() => changeView(key)}><span>{icons[key]}</span>{views[key]}</button>)}</nav>
       <div className="sidebarFoot"><i /> Nội bộ Fastgo</div>
     </aside>
@@ -314,9 +316,9 @@ export default function Dashboard({ name }: { name: string }) {
             {!previewSales.length && <option value="">Chưa có Sales</option>}
             {previewSales.map((member) => <option key={member.email} value={member.email}>{member.name} · {member.team}</option>)}
           </select></label>}
-          {readOnly && <span>{!previewScope && previewRole !== "head" ? "Thêm nhân sự hoặc nhóm thật để xem dữ liệu trong phạm vi này." : "Đang xem thử · Chỉ xem"}</span>}
+          {previewRole && <span>{!previewScope && (previewRole === "lead" || previewRole === "sale") ? "Thêm nhân sự hoặc nhóm thật để xem dữ liệu trong phạm vi này." : "Đang xem thử · Chỉ xem"}</span>}
         </section>}
-        {data && view === "kpi" && <KpiPolicy role={previewRole || data.role} />}
+        {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "logwork" && <section className="panel">
           <div className="sectionHead">
             <div><h2>Hoạt động theo ngày</h2><p>Cập nhật đối tác tự vào nhật ký của người thao tác. Mỗi người có thể ghi thêm từng hoạt động nội bộ trong ngày.</p></div>
@@ -395,7 +397,7 @@ export default function Dashboard({ name }: { name: string }) {
             <label>Họ tên<input required maxLength={100} value={person.name} onChange={(e) => setPerson({ ...person, name: e.target.value })} /></label>
             <label>Email<input type="email" required maxLength={254} value={person.email} onChange={(e) => setPerson({ ...person, email: e.target.value })} /></label>
             <label>Vai trò<select value={person.role} onChange={(e) => setPerson({ ...person, role: e.target.value as Role })}>{Object.entries(roles).map(([key, role]) => <option key={key} value={key}>{role}</option>)}</select></label>
-            <label>Team<input required={person.role !== "head"} maxLength={60} placeholder="Ví dụ Team 01" value={person.team} onChange={(e) => setPerson({ ...person, team: e.target.value })} /></label>
+            <label>Team<input required={person.role === "lead" || person.role === "sale"} maxLength={60} placeholder="Ví dụ Team 01" value={person.team} onChange={(e) => setPerson({ ...person, team: e.target.value })} /></label>
             <div className="actions"><button type="button" onClick={() => setPerson(undefined)}>Hủy</button><button className="primary" disabled={busy}>Lưu nhân sự</button></div>
           </form>}
           <div className="tableWrap"><table><thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Team</th>{canSetCodes && <th>Thao tác</th>}</tr></thead><tbody>
@@ -472,7 +474,7 @@ export default function Dashboard({ name }: { name: string }) {
             const missing = progress ? progress.total - progress.completed : 0;
             return <tr key={entry.id}><td>
             {entry.kind === "partner" ? <button className="textButton" onClick={() => openCenter(entry.id)}>{entry.title}</button> : <b>{entry.title}</b>}
-            {entry.partnerId ? <small><button className="textButton" onClick={() => openCenter(entry.partnerId ?? undefined)}>{linkedCenterName(entry)}</button></small> :
+            {entry.partnerId ? <small>{intakeOnly ? linkedCenterName(entry) : <button className="textButton" onClick={() => openCenter(entry.partnerId ?? undefined)}>{linkedCenterName(entry)}</button>}</small> :
               needsPartner(entry.kind) ? <small>Chưa liên kết trung tâm{entry.partner && " · " + entry.partner}</small> : entry.partner && <small>{entry.partner}</small>}
             {entry.kind === "partner" && latestContact.has(entry.id ?? "") && <small>Lần cuối {activityWhen(latestContact.get(entry.id ?? "")!)} · {latestContact.get(entry.id ?? "")?.title}</small>}
             {entry.notes && <details><summary>Ghi chú</summary><div className="notes">{entry.notes}</div></details>}

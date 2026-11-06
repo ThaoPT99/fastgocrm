@@ -7,5 +7,5 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   const user = await getCrmIdentity();
   if (!user) return <PasscodeLogin />;
-  return <Dashboard name={user.displayName} />;
+  return <Dashboard name={user.displayName} initialView={user.role === "intake" ? "intake" : "overview"} />;
 }

@@ -70,10 +70,10 @@ export async function getCrmIdentity() {
       .where(and(eq(adminSessions.digest, tokenDigest), eq(adminSessions.keyDigest, key), gt(adminSessions.expiresAt, Date.now()))).get();
     if (admin) {
       const profile = await db.select({ displayName: members.name }).from(members).where(eq(members.email, email)).get();
-      return { email, displayName: profile?.displayName ?? "Quản trị viên", ownerAdmin: true, viaCode: false };
+      return { email, displayName: profile?.displayName ?? "Quản trị viên", role: "head" as const, ownerAdmin: true, viaCode: false };
     }
   }
-  const member = await db.select({ email: members.email, displayName: members.name })
+  const member = await db.select({ email: members.email, displayName: members.name, role: members.role })
     .from(accessSessions)
     .innerJoin(accessCodes, and(eq(accessCodes.email, accessSessions.email), eq(accessCodes.digest, accessSessions.codeDigest)))
     .innerJoin(members, eq(members.email, accessSessions.email))

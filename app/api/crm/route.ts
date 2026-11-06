@@ -14,9 +14,9 @@ const json = (data: unknown, status = 200) => Response.json(data, {
 const memberInput = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
   name: z.string().trim().min(1).max(100),
-  role: z.enum(["head", "lead", "sale"]),
+  role: z.enum(["head", "lead", "sale", "intake"]),
   team: z.string().trim().max(60),
-}).refine((member) => !isDemoEmail(member.email) && (member.role === "head" || member.team.length > 0));
+}).refine((member) => !isDemoEmail(member.email) && (member.role === "head" || member.role === "intake" || member.team.length > 0));
 const recordInput = z.object({
   id: z.string().uuid().optional(),
   version: z.number().int().positive().optional(),
@@ -92,7 +92,7 @@ async function context(request: Request) {
   const actor = roster.find((member) => member.email === email);
   if (!admin && (!actor || isDemoEmail(email))) return null;
   const role = salesMode ? "sale" : admin ? "head" : actor!.role;
-  const visible = roster.filter((member) => role === "head" ||
+  const visible = roster.filter((member) => role === "head" || role === "intake" ||
     (role === "lead" ? member.team === actor!.team : member.email === email));
   return { db, email, admin, ownerAdmin, salesMode, role, visible, viaCode: identity.viaCode, name: identity.displayName };
 }
@@ -101,12 +101,14 @@ export async function GET(request: Request) {
   const ctx = await context(request);
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
   const rows = ctx.visible.length ? await ctx.db.select().from(records)
-    .where(inArray(records.owner, ctx.visible.map((member) => member.email)))
+    .where(ctx.role === "intake" ? eq(records.kind, "intake") : inArray(records.owner, ctx.visible.map((member) => member.email)))
     .orderBy(asc(records.date), asc(records.id)) : [];
   const demoCleared = ctx.admin && await hasInstall(ctx.db, demoCleanupKey);
   const partnersLinked = ctx.admin && await hasInstall(ctx.db, partnerLinkKey);
   const followupsReady = ctx.admin && await hasInstall(ctx.db, followupKey);
-  const roster = ctx.salesMode ? ctx.visible.map((member) => ({ ...member, role: "sale" })) : ctx.visible;
+  const intakeOwners = ctx.role === "intake" ? new Set(rows.map((row) => row.owner)) : null;
+  const roster = intakeOwners ? ctx.visible.filter((member) => intakeOwners.has(member.email))
+    : ctx.salesMode ? ctx.visible.map((member) => ({ ...member, role: "sale" })) : ctx.visible;
   const codeEmails = ctx.role === "head" ? (await ctx.db.select({ email: accessCodes.email }).from(accessCodes)).map((item) => item.email) : [];
   const visibleEmails = new Set(roster.map((member) => member.email));
   const scopedRows = rows.map((row) => row.performedBy && !visibleEmails.has(row.performedBy)
@@ -154,6 +156,9 @@ export async function POST(request: Request) {
 
   const ctx = await context(request);
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
+  if (ctx.role === "intake" && data.action !== "change-passcode") {
+    return json({ error: "Nhân viên hồ sơ chỉ được xem hồ sơ tiếp nhận." }, 403);
+  }
   if (data.action === "passcode") {
     const member = ctx.visible.find((person) => person.email === data.email);
     if (ctx.role !== "head" || !member || (!ctx.admin && member.role === "head")) {

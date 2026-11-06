@@ -33,7 +33,7 @@ function Bands({ title, criterion, rows }: { title: string; criterion: string; r
   </section>;
 }
 
-export default function KpiPolicy({ role }: { role: Role }) {
+export default function KpiPolicy({ role }: { role: Exclude<Role, "intake"> }) {
   const sales = role === "sale";
   const lead = role === "lead";
   return <>
