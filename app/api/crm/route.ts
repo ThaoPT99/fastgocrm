@@ -165,7 +165,7 @@ export async function POST(request: Request) {
     return assigned.rowsAffected === 1 ? json({ ok: true }) : json({ error: "Mã này đang được sử dụng. Hãy chọn mã khác." }, 409);
   }
   if (data.action === "change-passcode") {
-    if (!ctx.viaCode || ctx.role !== "sale") return json({ error: "Tính năng dành cho Sales đã đăng nhập bằng mật mã." }, 403);
+    if (!ctx.viaCode) return json({ error: "Tính năng dành cho nhân sự đăng nhập bằng mật mã cá nhân." }, 403);
     const pin = data.newCode.trim();
     if (!validNewPin(pin)) return json({ error: "Mã cần đúng 8 chữ số. Hãy tránh dãy liên tiếp hoặc lặp cùng một số." }, 400);
     if (!await allowAccessAttempt("change:" + ctx.email, 8)) return json({ error: "Đã thử quá nhiều lần. Vui lòng thử lại sau ít phút." }, 429);

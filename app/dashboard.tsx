@@ -260,7 +260,7 @@ export default function Dashboard({ name }: { name: string }) {
       <div className="sidebarFoot"><i /> Nội bộ Fastgo</div>
     </aside>
     <main>
-      <header className="top"><span>Fastgo CRM / <b>{views[view]}</b></span><div><b>{name}</b> {data?.role === "sale" && !data.ownerAdmin && <>
+      <header className="top"><span>Fastgo CRM / <b>{views[view]}</b></span><div><b>{name}</b> {data && !data.ownerAdmin && <>
         {" "}<button className="textButton" disabled={busy} onClick={() => { closePinForm(); setChangingPin(true); }}>Đổi mật mã</button>{" · "}
       </>}<button className="textButton" disabled={busy} onClick={signOutWithCode}>Đăng xuất</button></div></header>
       <div className="content">
