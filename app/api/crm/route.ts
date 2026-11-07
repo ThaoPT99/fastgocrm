@@ -169,17 +169,17 @@ export async function POST(request: Request) {
     if (ctx.role === "intake" || !ctx.visible.some((person) => person.email === ctx.email)) {
       return json({ error: "Bạn không có quyền lưu kế hoạch KPI." }, 403);
     }
-    const { quarter, version, actual, sources } = data.plan;
-    const ids = sources.map((source) => source.centerId);
+    const { quarter, version, actual, sources, settings } = data.plan;
+    const ids = [...new Set([...sources.map((source) => source.centerId), ...(settings?.centers.map((center) => center.centerId) ?? [])])];
     if (ids.length) {
       const centers = await ctx.db.select({ id: records.id }).from(records)
         .where(and(eq(records.kind, "partner"), eq(records.owner, ctx.email), inArray(records.id, ids)));
       if (centers.length !== ids.length) return json({ error: "Hãy chọn trung tâm bạn đang phụ trách." }, 400);
     }
     const saved = version === 0
-      ? await ctx.db.insert(kpiPlans).values({ owner: ctx.email, quarter, version: 1, actual, sources })
+      ? await ctx.db.insert(kpiPlans).values({ owner: ctx.email, quarter, version: 1, actual, sources, settings })
         .onConflictDoNothing().returning({ version: kpiPlans.version })
-      : await ctx.db.update(kpiPlans).set({ actual, sources, version: version + 1 })
+      : await ctx.db.update(kpiPlans).set({ actual, sources, settings, version: version + 1 })
         .where(and(eq(kpiPlans.owner, ctx.email), eq(kpiPlans.quarter, quarter), eq(kpiPlans.version, version)))
         .returning({ version: kpiPlans.version });
     return saved.length ? json({ ok: true }) : json({ error: "Kế hoạch vừa thay đổi. Hãy tải lại trang trước khi lưu." }, 409);

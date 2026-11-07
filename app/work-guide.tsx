@@ -11,7 +11,7 @@ const partnerStep: Step = {
 };
 const planStep: Step = {
   title: "Lập và cập nhật kế hoạch quý",
-  description: "Chọn quý, nhập số hồ sơ đạt chuẩn đã đối soát và số còn dự kiến theo từng trung tâm. CRM tính mục tiêu từng tuần và chỉ ra loại hồ sơ còn thiếu nguồn. Khi hồ sơ đạt chuẩn, cập nhật cả số thực tế và phần dự kiến tương ứng.",
+  description: "Chọn quý, đi qua 4 bước hướng dẫn để xác nhận số đã đạt, nguồn hiện có và sức làm mỗi ngày. CRM đề xuất lượng trung tâm cần tiếp cận mỗi tuần. Người mới có thể để trống nguồn đang có. Lưu ở bước cuối, rồi bổ sung các trung tâm cụ thể để triển khai.",
   label: "Mở kế hoạch KPI quý",
   to: "plan",
 };

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { programs, personalTargets, quarterOf, quarterRange, weeklyMilestones, type KpiPlan } from "./kpi-plan";
+import { defaultOutreach, planInput, programs, personalTargets, quarterOf, quarterRange, weeklyMilestones, type KpiPlan } from "./kpi-plan";
 import { roles, type Role } from "./crm";
+import PlanOutreach, { OutreachInputs, type PlanningRecord } from "./plan-outreach";
 
 type Person = { email: string; name: string; role: Role; team: string };
 type Center = { id?: string; owner: string; title: string; followupDate?: string | null };
@@ -12,8 +13,9 @@ const zero = (): Counts => [0, 0];
 const displayDate = (date: string) => date.split("-").reverse().join("/");
 const yearQuarterLabel = (quarter: string) => "Quý " + quarter.slice(-1) + "/" + quarter.slice(0, 4);
 
-export default function KpiPlanner({ day, members, centers, plans, email, readOnly, busy, save, open }: {
+export default function KpiPlanner({ day, members, centers, records, plans, email, readOnly, busy, save, open, goPartners }: {
   day: string; members: Person[]; centers: Center[]; plans: SavedPlan[]; email: string;
+  records: PlanningRecord[]; goPartners: () => void;
   readOnly: boolean; busy: boolean; save: (plan: KpiPlan) => void; open: (id: string, update: boolean) => void;
 }) {
   const current = quarterOf(day);
@@ -54,18 +56,23 @@ export default function KpiPlanner({ day, members, centers, plans, email, readOn
     </section>}
     <QuarterPlan key={member.email + activeQuarter + (saved?.version ?? 0)} day={day} quarter={activeQuarter}
       role={member.role} centers={centers.filter((center) => center.owner === member.email && center.id)}
-      saved={saved} editable={!readOnly && email === member.email} busy={busy} save={save} open={open} />
+      records={records} goPartners={goPartners} saved={saved} editable={!readOnly && email === member.email} busy={busy} save={save} open={open} />
   </>;
 }
 
-function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save, open }: {
+function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, editable, busy, save, open }: {
   day: string; quarter: string; role: Exclude<Role, "intake">; centers: Center[];
+  records: PlanningRecord[]; goPartners: () => void;
   saved?: SavedPlan; editable: boolean; busy: boolean; save: (plan: KpiPlan) => void; open: (id: string, update: boolean) => void;
 }) {
   const { start, end } = quarterRange(quarter);
   const [plan, setPlan] = useState<KpiPlan>(() => ({
     quarter, version: saved?.version ?? 0, actual: saved?.actual ?? zero(), sources: saved?.sources ?? [],
+    settings: saved?.settings ?? defaultOutreach(quarter, day),
   }));
+  const [step, setStep] = useState(saved?.settings ? 3 : 0);
+  const [validation, setValidation] = useState("");
+  const steps = ["Chỉ tiêu và số đã đạt", "Nguồn từ trung tâm đang có", "Giả định và sức làm", "Kế hoạch đề xuất"];
   const targets = personalTargets(role);
   const gap = targets.map((target, index) => Math.max(0, target - plan.actual[index]));
   const centerById = new Map(centers.map((center) => [center.id, center]));
@@ -80,7 +87,8 @@ function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save,
       || Number(b.confirmed) - Number(a.confirmed) || a.date.localeCompare(b.date));
   const available = centers.filter((center) => !plan.sources.some((source) => source.centerId === center.id));
   const dirty = JSON.stringify(plan.actual) !== JSON.stringify(saved?.actual ?? zero())
-    || JSON.stringify(plan.sources) !== JSON.stringify(saved?.sources ?? []);
+    || JSON.stringify(plan.sources) !== JSON.stringify(saved?.sources ?? [])
+    || JSON.stringify(plan.settings) !== JSON.stringify(saved?.settings);
 
   function setSource(index: number, changes: Partial<KpiPlan["sources"][number]>) {
     setPlan({ ...plan, sources: plan.sources.map((source, position) => position === index ? { ...source, ...changes } : source) });
@@ -96,15 +104,47 @@ function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save,
     </label>);
   }
 
-  return <>
-    {editable && <section className="toolbar startHere">
-      <span><b>Cách lập kế hoạch.</b> Chọn quý, cập nhật số đã đạt và nguồn dự kiến, rồi xem phần thiếu nguồn và việc cần ưu tiên.</span>
-      <button type="button" onClick={() => document.getElementById("plan-inputs")?.focus()}>Đến phần nhập số liệu</button>
+  function next() {
+    const result = planInput.safeParse(plan);
+    if (!result.success) {
+      setValidation("Kiểm tra số hồ sơ, ngày trong quý và số lượng dự kiến của từng nguồn. Mỗi nguồn cần ít nhất 1 hồ sơ.");
+      return;
+    }
+    setValidation("");
+    setStep(Math.min(3, step + 1));
+  }
+
+  if (!editable && !saved) return <section className="panel policy">
+    <h2>Chưa có kế hoạch đã lưu</h2>
+    <p>Nhân sự cần tự lập kế hoạch cho quý này. Khi đã lưu, bạn có thể xem nguồn dự kiến, khối lượng tiếp cận và các giả định tại đây.</p>
+  </section>;
+
+  return <form className="guidedPlan" onSubmit={(event) => {
+    event.preventDefault();
+    if (!editable || busy) return;
+    if (step < 3) next();
+    else if (planInput.safeParse(plan).success) save(plan);
+  }}>
+    <fieldset className="planFieldset" disabled={busy}>
+    {editable && <section className="panel policy">
+      <h2>{saved ? "Rà và điều chỉnh kế hoạch" : "Lập kế hoạch có hướng dẫn"}</h2>
+      <p>Quý đã chọn ở phía trên. Hoàn thành các bước dưới đây để nhận mục tiêu tiếp cận theo tuần.</p>
+      <ol className="planSteps">{steps.map((label, index) => <li key={label} aria-current={step === index ? "step" : undefined}>
+        <span>{index + 1}</span>{label}
+      </li>)}</ol>
+      {dirty && <p>Thay đổi đang được tính thử. Bấm Lưu kế hoạch ở bước cuối để lưu.</p>}
     </section>}
-    <section className="panel policy">
+    {validation && <p className="notice error" role="alert">{validation}</p>}
+    {(!editable || step === 0) && <section className="panel policy">
+      <h2>1. Chỉ tiêu và số đã đạt</h2>
+      <p>KPI cá nhân của quý đã chọn · {targets[0]} D2-6 và {targets[1]} D4-1, tổng {targets[0] + targets[1]} hồ sơ đạt chuẩn.</p>
+      {editable && <div className="planForm"><p>Nhập số đã đối soát trong quý. Nhân viên mới chưa có kết quả giữ số 0.</p>
+        <div className="formGrid">{countFields(plan.actual, (actual) => setPlan({ ...plan, actual }), "Đã đạt ")}</div></div>}
+      {!editable && <p>Đã đạt {plan.actual[0]} D2-6 và {plan.actual[1]} D4-1.</p>}
+    </section>}
+    {(!editable || step === 3) && <><section className="panel policy">
       <h2>Mức độ đủ nguồn</h2>
-      {!saved && !dirty && <p>Chưa có kế hoạch đã lưu. Bảng dưới dùng chỉ tiêu cá nhân và tiến độ ban đầu bằng 0.</p>}
-      {dirty && <p>Đang tính thử theo thay đổi chưa lưu.</p>}
+      {!saved && <p>Kế hoạch đang tính thử, chưa được lưu.</p>}
       <div className="tableWrap"><table>
         <thead><tr><th>Loại hồ sơ</th><th>KPI</th><th>Đạt chuẩn đã xác nhận</th><th>Còn thiếu</th><th>Nguồn đã xác nhận</th><th>Nguồn chưa xác nhận</th><th>Còn thiếu nguồn</th></tr></thead>
         <tbody>{programs.map((program, index) => <tr key={program}>
@@ -114,6 +154,8 @@ function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save,
       </table></div>
       <p>Chỉ tính nguồn còn hiệu lực trong quý. Nguồn đã xác nhận vẫn là dự kiến cho tới khi hồ sơ đạt chuẩn.</p>
     </section>
+    <PlanOutreach plan={plan} day={day} remaining={remaining} centers={centers} records={records} editable={editable}
+      change={(settings) => setPlan({ ...plan, settings })} open={(id) => open(id, editable)} goPartners={goPartners} dirty={dirty} />
     {day <= end && gap.some(Boolean) && <section className="panel policy">
       <h2>Việc ưu tiên đề xuất</h2>
       {remaining.some(Boolean) && <p><b>Bổ sung nguồn:</b> {programs.map((program, index) => remaining[index] ? remaining[index] + " " + program : "").filter(Boolean).join(" và ")}. Đây là phần còn thiếu kể cả khi các nguồn đang dự kiến đều thành hiện thực.</p>}
@@ -139,11 +181,12 @@ function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save,
           {milestone.counts.map((count, index) => <td key={programs[index]}>{count}</td>)}</tr>)}</tbody>
       </table></div>
     </section>}
-    <section className="panel policy">
-      <h2 id="plan-inputs" tabIndex={-1}>{editable ? "Cập nhật số thực tế và nguồn" : "Nguồn dự kiến"}</h2>
-      <form className="planForm" onSubmit={(event) => { event.preventDefault(); if (editable && !busy) save(plan); }}>
-        {editable && <><p>Nhập số hồ sơ đạt chuẩn đã đối soát theo từng loại. Khi hồ sơ từ một trung tâm đạt chuẩn, cộng vào thực tế và giảm số còn dự kiến ở nguồn đó.</p>
-          <div className="formGrid">{countFields(plan.actual, (actual) => setPlan({ ...plan, actual }), "Đã đạt ")}</div></>}
+    </>}
+    {(!editable || step === 1) && <section className="panel policy">
+      <h2>2. Nguồn từ trung tâm đang có</h2>
+      <div className="planForm">
+        {editable && <><p>Chưa có đối tác hoặc chưa có nguồn cụ thể? Giữ trống và bấm Tiếp tục. CRM sẽ tính nguồn cần phát triển mới.</p>
+          <p>Mức gửi ít 1 bộ, trung bình 3 bộ, mạnh 5 bộ mỗi quý giúp bạn ước lượng. Nhập số còn có thể đạt chuẩn trong quý này, tách theo D2-6 và D4-1. Khi hồ sơ đạt chuẩn, tăng số thực tế ở bước 1 và giảm số dự kiến tại đây.</p></>}
         {plan.sources.map((source, index) => <fieldset key={source.centerId} className="planSource" disabled={!editable || busy}>
           <legend>{centerById.get(source.centerId)?.title ?? "Trung tâm không còn trong phạm vi phụ trách"}</legend>
           {editable ? <>
@@ -161,14 +204,29 @@ function QuarterPlan({ day, quarter, role, centers, saved, editable, busy, save,
         </fieldset>)}
         {editable && <>
           <label>Thêm nguồn từ trung tâm<select value="" disabled={!available.length || busy || plan.sources.length >= 200} onChange={(event) => {
-            if (event.target.value) setPlan({ ...plan, sources: [...plan.sources, { centerId: event.target.value, date: end, confirmed: false, counts: zero() }] });
+            const centerId = event.target.value;
+            if (centerId) setPlan({ ...plan,
+              sources: [...plan.sources, { centerId, date: end, confirmed: false, counts: zero() }],
+              settings: { ...plan.settings!, centers: plan.settings!.centers.filter((center) => center.centerId !== centerId) },
+            });
           }}>
             <option value="">{available.length ? "Chọn trung tâm đang phụ trách" : "Không còn trung tâm để thêm"}</option>
             {available.map((center) => <option key={center.id} value={center.id}>{center.title}</option>)}
           </select></label>
-          <div className="actions"><button className="primary" disabled={busy || Boolean(saved && !dirty) || plan.sources.some((source) => !source.counts.some(Boolean))}>Lưu kế hoạch</button></div>
         </>}
-      </form>
-    </section>
-  </>;
+      </div>
+    </section>}
+    {(!editable || step === 2) && <OutreachInputs quarter={quarter} settings={plan.settings!}
+      disabled={!editable || busy} change={(settings) => setPlan({ ...plan, settings })} />}
+    {editable && <div className="toolbar planNavigation">
+      <span>Bước {step + 1}/4 · {steps[step]}</span>
+      <div className="rowActions">
+        {step > 0 && <button type="button" disabled={busy} onClick={() => { setValidation(""); setStep(step - 1); }}>Quay lại</button>}
+        <button className="primary" disabled={busy || (step === 3 && Boolean(saved && !dirty))}>
+          {busy ? "Đang lưu…" : step === 3 ? "Lưu kế hoạch" : "Tiếp tục"}
+        </button>
+      </div>
+    </div>}
+    </fieldset>
+  </form>;
 }

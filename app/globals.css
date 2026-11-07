@@ -76,6 +76,12 @@ summary { cursor:pointer; color:#3658ba }
 .kpiTargets span { font-size:13px; color:#55667e }
 .kpiTargets strong { font-size:27px; color:#2444a9 }
 .planForm,.planPriorities { display:grid; gap:12px }
+.planFieldset { border:0; padding:0; margin:12px 0; min-width:0 }
+.planSteps { list-style:none; display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr)); gap:8px; padding:0; margin:16px 0 }
+.planSteps li { display:flex; gap:8px; align-items:center; border:1px solid #dfe5ee; padding:10px; border-radius:9px; color:#55667e; font-size:13px }
+.planSteps li[aria-current] { background:#e9efff; color:#28469d; border-color:#9eb3e8; font-weight:700 }
+.planSteps li span { font-weight:750 }
+.planNavigation { position:sticky; bottom:8px; border:1px solid #cfd8e6; box-shadow:0 3px 12px #19243718; z-index:2 }
 .planForm label { display:grid; gap:5px; min-width:0 }
 .planForm input,.planForm select { width:100%; min-width:0; min-height:44px }
 .planForm .formGrid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr)) }

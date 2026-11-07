@@ -15,6 +15,7 @@ export const kpiPlans = sqliteTable("kpi_plans", {
   version: integer().notNull(),
   actual: text({ mode: "json" }).$type<KpiPlan["actual"]>().notNull(),
   sources: text({ mode: "json" }).$type<KpiPlan["sources"]>().notNull(),
+  settings: text({ mode: "json" }).$type<KpiPlan["settings"]>(),
 }, (table) => [primaryKey({ columns: [table.owner, table.quarter] })]);
 
 export const records = sqliteTable("records", {

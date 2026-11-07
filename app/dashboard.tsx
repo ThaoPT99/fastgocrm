@@ -4,11 +4,12 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { categories, needsPartner, partnerActivityKinds, roles, statuses, today, type Kind, type Role } from "./crm";
 import KpiPolicy from "./kpi-policy";
 import KpiPlanner from "./kpi-planner";
-import type { KpiPlan } from "./kpi-plan";
+import { quarterOf, type KpiPlan } from "./kpi-plan";
 import PartnerFollowup from "./partner-followup";
 import IntakeChecklistFields from "./intake-checklist-fields";
 import SalesQueue from "./sales-queue";
 import WorkGuide from "./work-guide";
+import TodayPlan from "./today-plan";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
@@ -390,12 +391,14 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               : "Xem quy trình theo vai trò và cách rà kế hoạch của nhân sự."}</span></div>
           <button onClick={() => changeView("guide")}>Xem hướng dẫn</button>
         </section>}
-        {data && view === "plan" && <KpiPlanner key={viewRole + previewScope} day={day} members={visible} centers={centers}
+        {data && view === "plan" && <KpiPlanner key={viewRole + previewScope} day={day} members={visible} centers={centers} records={rows}
           plans={data.plans ?? []} email={data.email}
           readOnly={readOnly} busy={busy} save={(plan) => void save({ action: "kpi-plan", plan }, "Đã lưu kế hoạch KPI.")}
-          open={openCenter} />}
+          open={openCenter} goPartners={() => changeView("partner")} />}
         {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "workday" && <>
+          <TodayPlan day={day} plan={data.plans?.find((plan) => plan.owner === (previewRole ? previewScope : data.email) && plan.quarter === quarterOf(day))}
+            centers={centers} records={rows} goPlan={() => changeView("plan")} goPartners={() => changeView("partner")} />
           <div className="toolbar">
             <b>{day.split("-").reverse().join("/")}</b>
             <div className="rowActions">
