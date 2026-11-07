@@ -27,6 +27,7 @@ const recordInput = z.object({
   status: z.string(),
   date: z.string().date(),
   partner: z.string().trim().max(180),
+  province: z.string().trim().max(100).nullable().optional(),
   partnerId: z.string().uuid().nullish(),
   intakeChecklist: z.object({
     residence: z.enum(["", "household", "residence"]),
@@ -330,6 +331,8 @@ export async function POST(request: Request) {
   const input = recordInput.safeParse(data.record);
   if (!input.success) return json({ error: "Kiểm tra thông tin bắt buộc. Nếu cần hỗ trợ, hãy mô tả vướng mắc." }, 400);
   const { id, version, ...record } = input.data;
+  if (record.kind !== "partner") delete record.province;
+  else if (record.province === "") record.province = null;
   if (record.kind !== "intake") delete record.intakeChecklist;
   if (!permitted.includes(record.owner)) return json({ error: "Bạn không có quyền giao cho nhân sự này." }, 403);
   if (record.kind === "logwork" && record.owner !== ctx.email) {

@@ -12,7 +12,7 @@ import WorkGuide from "./work-guide";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
-type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
+type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; province?: string | null; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
 type Data = { members: Member[]; records: Entry[]; plans: (KpiPlan & { owner: string })[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
 type View = "overview" | "workday" | "people" | "kpi" | "plan" | "guide" | Kind;
 
@@ -271,7 +271,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const lateCenters = centers.filter((center) => followupGroup(center.followupDate, day) === "late");
   const filtered = rows.filter((entry) => entry.kind === view &&
     (view !== "partner" || followupFilter === "all" || followupGroup(entry.followupDate, day) === followupFilter) &&
-    [entry.title, linkedCenterName(entry), entry.status, people.get(entry.owner)?.name].join(" ").toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi").trim()));
+    [entry.title, linkedCenterName(entry), entry.province, entry.status, people.get(entry.owner)?.name].join(" ").toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi").trim()));
   if (view === "partner") filtered.sort((a, b) => (a.followupDate ?? "9999").localeCompare(b.followupDate ?? "9999"));
   const intakeProgress = new Map(view === "intake"
     ? filtered.map((entry) => [entry, checklistProgress(entry.intakeChecklist)] as const) : []);
@@ -529,7 +529,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           </tbody></table></div>
         </section>}
         {data && view === "partner" && selectedCenter && <section className="panel">
-          <div className="sectionHead"><div><div className="eyebrow">HỒ SƠ TRUNG TÂM</div><h2 ref={centerHeading} tabIndex={-1}>{selectedCenter.title}</h2><p>{people.get(selectedCenter.owner)?.name} · {selectedCenter.status}</p></div>
+          <div className="sectionHead"><div><div className="eyebrow">HỒ SƠ TRUNG TÂM</div><h2 ref={centerHeading} tabIndex={-1}>{selectedCenter.title}</h2><p>{people.get(selectedCenter.owner)?.name} · {selectedCenter.status}</p><p>Tỉnh/thành phố · {selectedCenter.province || "Chưa cập nhật"}</p></div>
             <div className="rowActions"><button onClick={() => {
               if (centerOrigin) changeView(centerOrigin);
               else { setCenterId(undefined); setUpdatingCenter(false); }
@@ -558,7 +558,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           })}</div>
         </section>}
         {data && kinds.includes(view as Kind) && (view !== "logwork" || draft) && <section className="panel">
-          {view !== "logwork" && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder="Tìm theo tên, đối tác, trạng thái…" value={query} onChange={(e) => setQuery(e.target.value)} />
+          {view !== "logwork" && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder={view === "partner" ? "Tìm theo tên, tỉnh/thành phố…" : "Tìm theo tên, đối tác, trạng thái…"} value={query} onChange={(e) => setQuery(e.target.value)} />
             {view === "intake" && <button disabled={exportingIntake || !intakeRows.length} onClick={exportIntake}>
               {exportingIntake ? "Đang xuất Excel…" : "Xuất Excel"}
             </button>}
@@ -577,6 +577,8 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           {intakeOnly && !readOnly && !intakeCenters.length && <p className="empty">Cần có trung tâm B2B trước khi tạo hồ sơ tiếp nhận.</p>}
           {draft && <form className="form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save({ action: "record", record: draft }, "Đã lưu bản ghi."); }}>
             <label>{draft.kind === "logwork" ? draft.id && !draft.loggedAt ? "Việc tiếp theo" : "Hoạt động đã làm" : draft.kind === "partner" ? "Tên trung tâm" : draft.kind === "intake" ? "Tên học sinh / mã hồ sơ" : "Tiêu đề"}<input ref={titleField} required maxLength={180} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
+            {draft.kind === "partner" && <label>Tỉnh/thành phố<input maxLength={100} value={draft.province ?? ""}
+              onChange={(event) => setDraft({ ...draft, province: event.target.value })} /></label>}
             <label>Người phụ trách<select disabled={draft.kind === "logwork" || intakeOnly} value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value, partnerId: undefined })}>{intakeOnly && <option value="">Theo trung tâm đã chọn</option>}{visible.map((member) => <option key={member.email} value={member.email}>{member.name}</option>)}</select></label>
             <label>Trạng thái<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>{statuses[draft.kind].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label>{draft.kind === "task" ? "Hạn xử lý" : "Ngày"}<input type="date" readOnly={draft.kind === "logwork"} required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
@@ -606,6 +608,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             const missing = progress ? progress.total - progress.completed : 0;
             return <tr key={entry.id}><td>
             {entry.kind === "partner" ? <button className="textButton" onClick={() => openCenter(entry.id)}>{entry.title}</button> : <b>{entry.title}</b>}
+            {entry.kind === "partner" && entry.province && <small>{entry.province}</small>}
             {entry.partnerId ? <small>{intakeOnly ? linkedCenterName(entry) : <button className="textButton" onClick={() => openCenter(entry.partnerId ?? undefined)}>{linkedCenterName(entry)}</button>}</small> :
               needsPartner(entry.kind) ? <small>Chưa liên kết trung tâm{entry.partner && " · " + entry.partner}</small> : entry.partner && <small>{entry.partner}</small>}
             {entry.kind === "partner" && latestContact.has(entry.id ?? "") && <small>Lần cuối {activityWhen(latestContact.get(entry.id ?? "")!)} · {latestContact.get(entry.id ?? "")?.title}</small>}

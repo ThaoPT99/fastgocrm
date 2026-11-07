@@ -25,6 +25,7 @@ export const records = sqliteTable("records", {
   status: text().notNull(),
   date: text().notNull(),
   partner: text().notNull(),
+  province: text(),
   partnerId: text("partner_id").references((): AnySQLiteColumn => records.id, { onDelete: "restrict" }),
   followupDate: text("followup_date"),
   followupAction: text("followup_action"),
