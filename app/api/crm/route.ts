@@ -1,12 +1,13 @@
-import { and, asc, eq, inArray, isNull, like, ne, not, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, inArray, isNull, like, ne, not, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getClient, getDb } from "../../../db";
 import { accessCodes, demoInstalls, kpiPlans, members, records } from "../../../db/schema";
 import { accessCodeDigest, allowAccessAttempt, getCrmIdentity, validNewPin } from "../../crm-auth";
 import { checklistItemIds, checklistOptionalIds } from "../../intake-checklist";
 import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, statuses, today } from "../../crm";
-import { planInput } from "../../kpi-plan";
+import { personalTargets, planInput, quarterOf } from "../../kpi-plan";
 import { analyzeKpiPlan } from "../../plan-analysis";
+import { contactEvidence, partnerAssistance, weeklyAssistance } from "../../crm-ai";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -41,6 +42,15 @@ const recordInput = z.object({
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
   (record.kind !== "logwork" || record.status !== "Cần hỗ trợ" || record.partner.length > 0));
 const command = z.discriminatedUnion("action", [
+  z.object({
+    action: z.literal("partner-ai"), centerId: z.string().uuid(),
+    mode: z.enum(["summary", "prepare", "message", "log"]),
+    note: z.string().trim().max(2500), channel: z.enum(followupChannels),
+  }),
+  z.object({
+    action: z.literal("weekly-ai"), teamReview: z.boolean(), owner: z.string().email().optional(),
+    team: z.string().max(60).optional(), from: z.string().date(), to: z.string().date(),
+  }),
   z.object({ action: z.literal("analyze-plan"), owner: z.string().email(), plan: planInput }),
   z.object({ action: z.literal("kpi-plan"), plan: planInput }),
   z.object({ action: z.literal("start-sales-mode") }),
@@ -168,6 +178,56 @@ export async function POST(request: Request) {
 
   const ctx = await context(request);
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
+  if (data.action === "partner-ai" || data.action === "weekly-ai") {
+    if (ctx.role === "intake") return json({ error: "Vai trò hồ sơ chưa có quyền dùng trợ lý kinh doanh." }, 403);
+    const permitted = ctx.visible.map((person) => person.email);
+    if (data.action === "partner-ai") {
+      const center = await ctx.db.select().from(records).where(and(eq(records.id, data.centerId), eq(records.kind, "partner"))).get();
+      if (!center || !permitted.includes(center.owner)) return json({ error: "Bạn không có quyền truy cập trung tâm này." }, 403);
+      if ((data.mode === "log" || data.mode === "message") && !data.note.trim()) return json({ error: "Nhập ghi chú hoặc mục đích soạn tin nhắn trước." }, 400);
+      if (!await allowAccessAttempt("assistant-ai:" + ctx.email, 20)) return json({ error: "Đã dùng 20 lượt trợ lý trong 10 phút. Bạn thử lại sau." }, 429);
+      const history = await ctx.db.select().from(records)
+        .where(and(eq(records.partnerId, center.id), inArray(records.kind, ["activity", "meeting"])))
+        .orderBy(desc(records.date), desc(records.loggedAt)).limit(30);
+      const intakeTotal = await ctx.db.select({ count: sql<number>`count(*)` }).from(records)
+        .where(and(eq(records.partnerId, center.id), eq(records.kind, "intake"))).get();
+      const result = await partnerAssistance(data.mode, {
+        ngayHienTai: today(), trungTam: { ten: center.title, tinh: center.province, trangThai: center.status, ghiChu: center.notes.slice(0, 700),
+          viecTiepTheo: center.followupAction, ngayTiepTheo: center.followupDate },
+        lichSu: contactEvidence(history), soBanGhiDuocCungCap: history.length, soHoSoDaTiepNhan: Number(intakeTotal?.count ?? 0),
+        ghiChuNguoiDung: data.note, hinhThucNguoiDungChon: data.channel,
+      });
+      return json(result, result.status);
+    }
+    if (data.from > data.to || (Date.parse(data.to) - Date.parse(data.from)) / 86_400_000 > 31) {
+      return json({ error: "Chọn khoảng thời gian tối đa 31 ngày." }, 400);
+    }
+    if (data.teamReview && ctx.role !== "head" && ctx.role !== "lead") return json({ error: "Chỉ Trưởng nhóm và Trưởng khối được tổng hợp họp nhóm." }, 403);
+    const membersInScope = ctx.visible.filter((person) => person.role !== "intake" &&
+      (data.teamReview ? !data.team || person.team === data.team : person.email === (data.owner ?? ctx.email)));
+    if (!membersInScope.length) return json({ error: "Chưa có nhân sự trong phạm vi tổng hợp." }, 403);
+    if (!await allowAccessAttempt("assistant-ai:" + ctx.email, 20)) return json({ error: "Đã dùng 20 lượt trợ lý trong 10 phút. Bạn thử lại sau." }, 429);
+    const owners = membersInScope.map((person) => person.email);
+    const periodRows = await ctx.db.select().from(records)
+      .where(and(inArray(records.owner, owners), gte(records.date, data.from), lte(records.date, data.to)));
+    const centers = await ctx.db.select().from(records).where(and(eq(records.kind, "partner"), inArray(records.owner, owners)));
+    const plans = await ctx.db.select().from(kpiPlans).where(and(inArray(kpiPlans.owner, owners), eq(kpiPlans.quarter, quarterOf(data.to))));
+    const report = membersInScope.map((person) => {
+      const personRows = periodRows.filter((record) => record.kind === "logwork" ? record.owner === person.email : (record.performedBy ?? record.owner) === person.email);
+      const plan = plans.find((item) => item.owner === person.email);
+      return {
+        nhanSu: person.name, nhom: person.team, vaiTro: person.role,
+        luotLienHe: personRows.filter((record) => record.kind === "activity").length,
+        hoSoTiepNhanTrongKy: periodRows.filter((record) => record.owner === person.email && record.kind === "intake").length,
+        trungTamQuaHen: centers.filter((center) => center.owner === person.email && center.followupDate && center.followupDate <= today()).length,
+        hoatDong: contactEvidence(personRows).slice(0, 5),
+        keHoach: plan ? { quy: plan.quarter, chiTieu: personalTargets(person.role as "head" | "lead" | "sale"), daDatChuan: plan.actual,
+          nguonConDuKien: [0, 1].map((index) => plan.sources.filter((source) => source.date >= today()).reduce((sum, source) => sum + source.counts[index], 0)) } : null,
+      };
+    });
+    const result = await weeklyAssistance({ tuNgay: data.from, denNgay: data.to, ngayHienTai: today(), nhanSu: report.slice(0, 30), tongNhanSu: report.length }, data.teamReview);
+    return json(result, result.status);
+  }
   if (data.action === "analyze-plan") {
     const member = ctx.visible.find((person) => person.email === data.owner);
     if (ctx.role === "intake" || !member || member.role === "intake") return json({ error: "Bạn không có quyền phân tích kế hoạch này." }, 403);

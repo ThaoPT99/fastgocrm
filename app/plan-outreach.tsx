@@ -19,9 +19,25 @@ export function OutreachInputs({ quarter, settings, change, disabled }: {
       <label>Số ngày đến lần gửi đầu tiên<input type="number" required min={1} max={90} step={1} value={settings.leadDays}
         onChange={(event) => change({ ...settings, leadDays: Number(event.target.value) })} /><small>14 ngày tương đương 2 tuần.</small></label>
       <label>Hồ sơ đạt chuẩn mỗi trung tâm mới<select value={settings.filesPerCenter}
-        onChange={(event) => change({ ...settings, filesPerCenter: Number(event.target.value) })}>
+        onChange={(event) => {
+          const total = Number(event.target.value);
+          change({ ...settings, filesPerCenter: total, outputByProgram: settings.outputByProgram && total > 1 ? [1, total - 1] : undefined });
+        }}>
         <option value={1}>1 bộ · Gửi ít</option><option value={3}>3 bộ · Trung bình</option><option value={5}>5 bộ · Mạnh</option>
       </select><small>Mặc định 1 bộ. Với 3 hoặc 5 bộ, cần xác nhận khả năng nhận đủ hồ sơ trong quý.</small></label>
+      <label>Cách phân bổ nguồn mới<select value={settings.outputByProgram ? "mixed" : "separate"} onChange={(event) => {
+        if (event.target.value === "mixed") {
+          const total = Math.max(3, settings.filesPerCenter);
+          change({ ...settings, filesPerCenter: total, outputByProgram: [1, total - 1] });
+        } else change({ ...settings, outputByProgram: undefined });
+      }}><option value="separate">Mỗi nhóm trung tâm tập trung một loại</option><option value="mixed">Một trung tâm gửi cả D2-6 và D4-1</option></select></label>
+      {settings.outputByProgram && programs.map((program, index) => <label key={program}>{program} mỗi trung tâm có gửi
+        <input type="number" required min={1} max={4} step={1} value={settings.outputByProgram![index]} onChange={(event) => {
+          const counts: [number, number] = [...settings.outputByProgram!];
+          counts[index] = Number(event.target.value);
+          change({ ...settings, outputByProgram: counts });
+        }} /><small>Tổng hai loại cần bằng {settings.filesPerCenter} bộ/trung tâm.</small>
+      </label>)}
       <label>Số trung tâm mới bạn có thể tiếp cận mỗi ngày<input type="number" required min={1} max={100} step={1} value={settings.dailyCapacity}
         onChange={(event) => change({ ...settings, dailyCapacity: Number(event.target.value) })} /></label>
     </div></fieldset>
@@ -70,12 +86,14 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
         : !result.days ? <p className="notice error" role="status">Thời gian còn lại không đủ mốc {settings.leadDays} ngày theo giả định. Cần Team Lead hỗ trợ nguồn có thể gửi sớm hoặc rà lại tiến độ của trung tâm đang chăm sóc.</p>
           : result.shortfall ? <p className="notice error" role="status">Khối lượng đang vượt khả năng bạn nhập. Bạn có thể tiếp cận khoảng {result.capacity} trung tâm trong thời gian còn lại, thiếu {result.shortfall} lượt tiếp cận trung tâm mới so với đề xuất. Trao đổi với Team Lead để bổ sung nguồn hoặc tăng hỗ trợ.</p>
             : <p className="notice">Khối lượng tiếp cận nằm trong khả năng bạn nhập. Kết quả vẫn phụ thuộc tỷ lệ gửi và số hồ sơ thực tế của các trung tâm.</p>}
-      <p>Mỗi nhóm tiếp cận tập trung vào một loại hồ sơ để tránh cộng trùng trung tâm. Phần dự kiến từ đối tác đang có được trừ trước khi tính lượng cần tiếp cận mới.</p>
+      <p>{settings.outputByProgram
+        ? "Mỗi trung tâm có gửi dự kiến đóng góp " + settings.outputByProgram[0] + " D2-6 và " + settings.outputByProgram[1] + " D4-1. Các cột theo loại có thể cùng một trung tâm; tổng tiếp cận đếm trung tâm duy nhất."
+        : "Mỗi nhóm tiếp cận tập trung vào một loại hồ sơ. Tổng tiếp cận cộng hai nhóm riêng."} Phần nguồn đang có được trừ trước khi tính tiếp cận mới.</p>
       <p>Mốc gửi đầu chỉ phản ánh thời gian đến lần gửi đầu tiên. Khi nhận hồ sơ, cần đối soát đạt chuẩn và cập nhật số thực tế để tính KPI.</p>
       {result.weeks.length > 0 && result.total > 0 && <div className="tableWrap mobileCards"><table>
         <thead><tr><th>Khoảng ngày làm việc</th><th>Số ngày làm việc</th><th>Trung tâm cho D2-6</th><th>Trung tâm cho D4-1</th><th>Tổng cần tiếp cận</th></tr></thead>
         <tbody>{result.weeks.map((week) => <tr key={week.date}><th scope="row">{dateLabel(week.from)} – {dateLabel(week.through)}</th><td data-label="Số ngày làm việc">{week.days} ngày</td>
-          {week.contacts.map((count, index) => <td data-label={"Trung tâm cho " + programs[index]} key={programs[index]}>{count}</td>)}<td data-label="Tổng trung tâm cần tiếp cận"><b>{week.contacts[0] + week.contacts[1]}</b></td></tr>)}</tbody>
+          {week.contacts.map((count, index) => <td data-label={"Trung tâm cho " + programs[index]} key={programs[index]}>{count}</td>)}<td data-label="Tổng trung tâm cần tiếp cận"><b>{week.total}</b></td></tr>)}</tbody>
       </table></div>}
     </section>
     <section className="panel policy">
@@ -98,7 +116,7 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
         </div>
         {editable ? <><label>Loại hồ sơ tập trung<select value={center.program} onChange={(event) => change({
           ...settings, centers: settings.centers.map((item, position) => position === index ? { ...item, program: event.target.value as typeof center.program } : item),
-        })}>{programs.map((program) => <option key={program}>{program}</option>)}</select></label>
+        })}>{[...programs, "Cả hai"].map((program) => <option key={program}>{program}</option>)}</select></label>
           <button type="button" onClick={() => change({ ...settings, centers: settings.centers.filter((_, position) => position !== index) })}>Bỏ chọn</button></>
           : <span className="pill">{center.program}</span>}
         {centerMap.has(center.centerId) && <button type="button" onClick={() => leave(() => open(center.centerId))}>{editable ? "Mở để liên hệ" : "Xem trung tâm"}</button>}

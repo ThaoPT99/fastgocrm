@@ -11,9 +11,11 @@ export const outreachSettings = z.object({
   conversion: z.number().min(1).max(100),
   leadDays: z.number().int().min(1).max(90),
   filesPerCenter: z.number().int().min(1).max(5),
+  outputByProgram: z.tuple([z.number().int().min(1).max(4), z.number().int().min(1).max(4)]).nullish(),
   dailyCapacity: z.number().int().min(1).max(100),
-  centers: z.array(z.object({ centerId: z.string().uuid(), program: z.enum(programs) })).max(1000),
-});
+  centers: z.array(z.object({ centerId: z.string().uuid(), program: z.enum(["D2-6", "D4-1", "Cả hai"]) })).max(1000),
+}).refine((settings) => !settings.outputByProgram || settings.outputByProgram[0] + settings.outputByProgram[1] === settings.filesPerCenter,
+  "Tổng D2-6 và D4-1 mỗi trung tâm cần bằng tổng hồ sơ dự kiến.");
 export const planInput = z.object({
   quarter: z.string().regex(quarterPattern),
   version: z.number().int().min(0),
@@ -71,25 +73,29 @@ export function outreachSchedule(quarter: string, day: string, gap: readonly num
     const weekday = new Date(date + "T00:00:00Z").getUTCDay();
     if (weekday !== 0 && weekday !== 6) days.push(date);
   }
-  const centers = gap.map((count) => Math.ceil(count / settings.filesPerCenter));
+  const centers = gap.map((count, index) => Math.ceil(count / (settings.outputByProgram?.[index] ?? settings.filesPerCenter)));
   const contacts = centers.map((count) => Math.ceil(count * 100 / settings.conversion));
-  const total = contacts.reduce((sum, count) => sum + count, 0);
-  const weeks = new Map<string, { date: string; from: string; through: string; contacts: number[]; days: number }>();
+  const total = settings.outputByProgram ? Math.max(...contacts) : contacts.reduce((sum, count) => sum + count, 0);
+  const weeks = new Map<string, { date: string; from: string; through: string; contacts: number[]; total: number; days: number }>();
   let allocatedD26 = 0;
+  let allocatedD41 = 0;
   let allocated = 0;
   for (const [index, date] of days.entries()) {
     const cumulative = Math.ceil(total * (index + 1) / days.length);
     const cumulativeD26 = total ? Math.round(cumulative * contacts[0] / total) : 0;
+    const cumulativeD41 = settings.outputByProgram ? Math.round(cumulative * contacts[1] / (total || 1)) : cumulative - cumulativeD26;
     const d26 = cumulativeD26 - allocatedD26;
     const weekEnd = shiftDay(date, 7 - new Date(date + "T00:00:00Z").getUTCDay());
     const key = weekEnd > end ? end : weekEnd;
-    const week = weeks.get(key) ?? { date: key, from: date, through: date, contacts: [0, 0], days: 0 };
+    const week = weeks.get(key) ?? { date: key, from: date, through: date, contacts: [0, 0], total: 0, days: 0 };
     week.through = date;
     week.contacts[0] += d26;
-    week.contacts[1] += cumulative - allocated - d26;
+    week.contacts[1] += cumulativeD41 - allocatedD41;
+    week.total += cumulative - allocated;
     week.days++;
     weeks.set(key, week);
     allocatedD26 = cumulativeD26;
+    allocatedD41 = cumulativeD41;
     allocated = cumulative;
   }
   const capacity = days.length * settings.dailyCapacity;

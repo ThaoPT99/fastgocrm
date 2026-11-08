@@ -24,6 +24,14 @@ aside { background:#101c32; color:#d3dded; padding:26px 15px; display:flex; flex
 .aiResult { padding-top:10px; margin-top:12px; border-top:1px solid #dfe5ee; overflow-wrap:anywhere; line-height:1.65 }
 .aiResult ol { padding-left:22px; display:grid; gap:12px }
 .aiResult small { color:#55667e }
+.partnerAssistant { border-block:1px solid #dfe5ee; margin-bottom:16px }
+.aiTabs { padding:0; margin:12px 0 }
+.aiMessage { white-space:pre-wrap; overflow-wrap:anywhere; padding:12px; background:#fff; border:1px solid #dfe5ee; border-radius:8px; margin:10px 0 }
+.aiResult li + li { margin-top:8px }
+.planAi .planForm { margin:12px 0 }
+.planAi textarea { width:100%; min-width:0; font-size:16px }
+.planAi h3 { font-size:15px; margin-bottom:6px }
+.planAi button { min-height:44px }
 @media(max-width:740px) {
   .dailyGreeting { padding:14px; gap:10px }
   .greetingSun { width:34px; height:34px; border-radius:10px }

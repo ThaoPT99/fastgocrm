@@ -12,6 +12,8 @@ import WorkGuide from "./work-guide";
 import TodayPlan from "./today-plan";
 import DailyGreeting from "./daily-greeting";
 import type { PlanAnalysis } from "./plan-analysis";
+import { PartnerAssistant, WeeklyAssistant, type AskAssistant } from "./crm-assistant";
+import type { FollowupUpdate } from "./partner-followup";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
@@ -71,6 +73,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const [centerId, setCenterId] = useState<string>();
   const [centerOrigin, setCenterOrigin] = useState<View>();
   const [updatingCenter, setUpdatingCenter] = useState(false);
+  const [followupDraft, setFollowupDraft] = useState<{ value: FollowupUpdate; revision: number }>();
   const [followupFilter, setFollowupFilter] = useState<FollowupFilter>("all");
   const [logDate, setLogDate] = useState(today);
   const [logTeam, setLogTeam] = useState("");
@@ -134,6 +137,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
       setDraft(undefined);
       setPerson(undefined);
       setUpdatingCenter(false);
+      setFollowupDraft(undefined);
       setMessage(notice);
       closePinForm();
       await refresh();
@@ -153,6 +157,16 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     if (!response.ok) throw new Error(result.error || "Chưa phân tích được kế hoạch. Bạn thử lại sau.");
     return result.analysis;
   }
+
+  const askAssistant: AskAssistant = async (request) => {
+    const response = await fetch("/api/crm", {
+      method: "POST", headers: crmHeaders(true), signal: AbortSignal.timeout(50_000),
+      body: JSON.stringify(request),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Chưa nhận được kết quả từ AI.");
+    return result.analysis;
+  };
 
   function closePinForm() {
     setPinTarget(undefined);
@@ -204,6 +218,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   }
 
   function changeView(next: View) {
+    setFollowupDraft(undefined);
     setMenuOpen(false);
     setView(next);
     setCenterId(undefined);
@@ -456,6 +471,8 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               })} />
           </div>
         </>}
+        {data && view === "logwork" && !readOnly && <WeeklyAssistant key={viewRole + logTeam} day={day} team={logTeam}
+          canReviewTeam={viewRole === "head" || viewRole === "lead"} ask={askAssistant} />}
         {data && view === "logwork" && <section className="panel">
           <div className="sectionHead">
             <div><h2>Hoạt động theo ngày</h2><p>Cập nhật đối tác tự vào nhật ký của người thao tác. Mỗi người có thể ghi thêm từng hoạt động nội bộ trong ngày.</p></div>
@@ -555,12 +572,18 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               if (centerOrigin) changeView(centerOrigin);
               else { setCenterId(undefined); setUpdatingCenter(false); }
             }}>{centerOrigin ? "Về " + views[centerOrigin] : "Đóng hồ sơ"}</button>
-              {!readOnly && <button className="primary" disabled={busy || updatingCenter} onClick={() => { setDraft(undefined); setUpdatingCenter(true); }}>Cập nhật đối tác</button>}</div></div>
+              {!readOnly && <button className="primary" disabled={busy || updatingCenter} onClick={() => { setDraft(undefined); setFollowupDraft(undefined); setUpdatingCenter(true); }}>Cập nhật đối tác</button>}</div></div>
           <div className="currentFollowup"><b>Follow-up tiếp theo</b>
             {selectedCenter.followupDate ? <span>{selectedCenter.followupAction} · <span className={followupGroup(selectedCenter.followupDate, day) === "late" ? "pill danger" : "pill"}>{selectedCenter.followupDate}</span></span>
               : <span>Chưa đặt lịch</span>}
           </div>
-          {updatingCenter && <PartnerFollowup key={selectedCenter.id} nextAction={selectedCenter.followupAction} nextDate={selectedCenter.followupDate} busy={busy}
+          {!readOnly && <PartnerAssistant key={selectedCenter.id + ":" + selectedCenter.version} centerId={selectedCenter.id!} ask={askAssistant} disabled={busy} apply={(value) => {
+            if (updatingCenter && !window.confirm("Bạn đang mở biểu mẫu cập nhật. Thay nội dung bằng bản nháp AI?")) return;
+            setDraft(undefined);
+            setFollowupDraft((previous) => ({ value, revision: (previous?.revision ?? 0) + 1 }));
+            setUpdatingCenter(true);
+          }} />}
+          {updatingCenter && <PartnerFollowup key={selectedCenter.id + ":" + (followupDraft?.revision ?? 0)} initial={followupDraft?.value} nextAction={selectedCenter.followupAction} nextDate={selectedCenter.followupDate} busy={busy}
             onCancel={() => setUpdatingCenter(false)}
             onSave={(update) => save({ action: "followup", centerId: selectedCenter.id, version: selectedCenter.version, ...update }, "Đã lưu hoạt động và cập nhật follow-up.")} />}
           <div className="centerTimeline">{(["activity", ...partnerActivityKinds.filter((kind) => kind !== "activity")] as const).map((kind) => {

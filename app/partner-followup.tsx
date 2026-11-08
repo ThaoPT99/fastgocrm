@@ -11,22 +11,24 @@ export type FollowupUpdate = {
   nextDate: string;
 };
 
-export default function PartnerFollowup({ nextAction, nextDate, busy, onSave, onCancel }: {
+export default function PartnerFollowup({ nextAction, nextDate, initial, busy, onSave, onCancel }: {
   nextAction?: string | null;
   nextDate?: string | null;
+  initial?: FollowupUpdate;
   busy: boolean;
   onSave: (value: FollowupUpdate) => void;
   onCancel: () => void;
 }) {
   const [value, setValue] = useState<FollowupUpdate>({
-    channel: "Cuộc gọi", activity: "", result: "", nextAction: nextAction ?? "", nextDate: nextDate ?? "",
+    channel: initial?.channel ?? "Cuộc gọi", activity: initial?.activity ?? "", result: initial?.result ?? "",
+    nextAction: initial?.nextAction ?? nextAction ?? "", nextDate: initial?.nextDate ?? nextDate ?? "",
   });
   return <form className="form followupForm" onSubmit={(event) => { event.preventDefault(); onSave(value); }}>
     <div className="wideField"><h2>Cập nhật đối tác</h2><p>Ghi việc vừa làm và kết quả. CRM sẽ lưu vào lịch sử trung tâm và Nhật ký làm việc. Nếu cần liên hệ tiếp, ghi rõ việc cần làm và ngày thực hiện.</p></div>
     <label>Hình thức<select value={value.channel} onChange={(event) => setValue({ ...value, channel: event.target.value as FollowupUpdate["channel"] })}>
       {followupChannels.map((channel) => <option key={channel}>{channel}</option>)}
     </select></label>
-    <label>Đã làm gì<input required maxLength={180} value={value.activity}
+    <label>Đã làm gì<input autoFocus required maxLength={180} value={value.activity}
       onChange={(event) => setValue({ ...value, activity: event.target.value })} /></label>
     <label className="wideField">Kết quả<textarea required rows={3} maxLength={4000} placeholder="Ví dụ Trung tâm quan tâm D2-6 và đề nghị gửi bảng phí" value={value.result}
       onChange={(event) => setValue({ ...value, result: event.target.value })} /></label>

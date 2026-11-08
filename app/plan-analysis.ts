@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requestDeepSeek } from "./deepseek";
 import { defaultOutreach, outreachSchedule, personalTargets, quarterRange, type KpiPlan } from "./kpi-plan";
 import type { Role } from "./crm";
 
@@ -27,38 +28,12 @@ export async function analyzeKpiPlan(plan: KpiPlan, role: Exclude<Role, "intake"
     ngayTinh: day, quy: plan.quarter, thuTuLoaiHoSo: ["D2-6", "D4-1"],
     chiTieu: targets, daDatChuan: plan.actual, nguonConDuKien: sourceCounts, nguonDaXacNhan: confirmed,
     hoSoConThieuNguon: remaining, soNguonQuaHen: plan.sources.filter((source) => source.date < day).length,
-    giaDinh: { tyLeGuiPhanTram: settings.conversion, ngayDenLanGuiDau: settings.leadDays, hoSoMoiTrungTamMoi: settings.filesPerCenter },
+    giaDinh: { tyLeGuiPhanTram: settings.conversion, ngayDenLanGuiDau: settings.leadDays, hoSoMoiTrungTamMoi: settings.filesPerCenter,
+      phanBoMoiTrungTam: settings.outputByProgram, cachTinh: settings.outputByProgram ? "Một trung tâm gửi cả hai loại, tổng tiếp cận là trung tâm duy nhất; không cộng hai cột theo loại" : "Hai nhóm trung tâm riêng theo loại hồ sơ" },
     ngayBatDau: schedule.from, hanTiepCan: schedule.deadline, soNgayLamViecConLai: schedule.days,
     trungTamCanCoGuiTheoLoai: schedule.centers, trungTamCanTiepCanTheoLoai: schedule.contacts,
     tongTrungTamCanTiepCan: schedule.total, trungTamCanTiepCanMoiNgay: schedule.dailyRequired,
     sucLamMoiNgay: settings.dailyCapacity, khaNangTiepCan: schedule.capacity, thieuLuotTiepCan: schedule.shortfall,
   };
-  try {
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-      method: "POST", signal: AbortSignal.timeout(40_000),
-      headers: { Authorization: "Bearer " + key, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash",
-        thinking: { type: "disabled" }, max_tokens: 1600,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: "Bạn là trợ lý lập kế hoạch KPI cho Fastgo CRM. Trả lời tiếng Việt, ngắn, dễ hiểu, hỗ trợ nhân viên mới. Dựa đúng số liệu hệ thống đã tính. Các mảng theo thứ tự D2-6 và D4-1. Không tự thay chỉ tiêu, không hứa chắc đạt KPI, không suy diễn tên đối tác hoặc thành tích. Tỷ lệ chuyển đổi và hồ sơ mỗi trung tâm là giả định có thể điều chỉnh. 14 ngày là mốc đến lần gửi đầu, không đảm bảo toàn bộ hồ sơ đạt chuẩn. Lịch thứ Hai đến thứ Sáu chưa trừ ngày lễ. Nếu vượt sức làm hoặc không đủ thời gian, nêu rõ cần hỗ trợ nguồn và ưu tiên nguồn hiện có. Đề xuất 2-3 hành động cụ thể, nêu lý do từ số liệu; không tự tăng giả định để làm đẹp tính khả thi. Nếu đã đủ nguồn, tập trung xác nhận và thu hồ sơ. Trả về JSON đúng dạng {\"summary\":\"nhận xét ngắn\",\"actions\":[{\"action\":\"việc cần làm\",\"reason\":\"lý do\"}],\"support\":\"đề xuất trao đổi với Team Lead\"}. Viết văn bản thuần trong các chuỗi, không Markdown." },
-          { role: "user", content: JSON.stringify(numbers) },
-        ],
-      }),
-    });
-    if (!response.ok) {
-      const error = response.status === 402 ? "Tài khoản DeepSeek chưa đủ số dư. Quản trị viên cần kiểm tra tài khoản."
-        : response.status === 401 ? "Khóa DeepSeek không còn hợp lệ. Quản trị viên cần cập nhật cấu hình."
-          : "DeepSeek đang bận hoặc chưa xử lý được yêu cầu. Bạn thử lại sau ít phút.";
-      return { error, status: 503 } as const;
-    }
-    const body = await response.json();
-    const choice = body.choices?.[0];
-    if (choice?.finish_reason !== "stop" || typeof choice?.message?.content !== "string") throw new Error("Incomplete analysis");
-    const analysis = analysisOutput.parse(JSON.parse(choice.message.content));
-    return { analysis, status: 200 } as const;
-  } catch {
-    return { error: "Chưa nhận được bản phân tích đầy đủ. Bạn thử lại sau ít phút.", status: 503 } as const;
-  }
+  return requestDeepSeek("Bạn là trợ lý lập kế hoạch KPI cho Fastgo CRM. Trả lời tiếng Việt, ngắn, dễ hiểu, hỗ trợ nhân viên mới. Dựa đúng số liệu hệ thống đã tính. Các mảng theo thứ tự D2-6 và D4-1. Không tự thay chỉ tiêu, không hứa chắc đạt KPI, không suy diễn tên đối tác hoặc thành tích. Tỷ lệ chuyển đổi và hồ sơ mỗi trung tâm là giả định có thể điều chỉnh. 14 ngày là mốc đến lần gửi đầu, không đảm bảo toàn bộ hồ sơ đạt chuẩn. Lịch thứ Hai đến thứ Sáu chưa trừ ngày lễ. Nếu vượt sức làm hoặc không đủ thời gian, nêu rõ cần hỗ trợ nguồn và ưu tiên nguồn hiện có. Đề xuất 2-3 hành động cụ thể, nêu lý do từ số liệu; không tự tăng giả định để làm đẹp tính khả thi. Nếu đã đủ nguồn, tập trung xác nhận và thu hồ sơ. Trả về JSON đúng dạng {\"summary\":\"nhận xét ngắn\",\"actions\":[{\"action\":\"việc cần làm\",\"reason\":\"lý do\"}],\"support\":\"đề xuất trao đổi với Team Lead\"}. Viết văn bản thuần trong các chuỗi, không Markdown.", numbers, analysisOutput);
 }
