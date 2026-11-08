@@ -6,6 +6,7 @@ import { roles, type Role } from "./crm";
 import PlanOutreach, { OutreachInputs, type PlanningRecord } from "./plan-outreach";
 import PlanAnalysisCard from "./plan-analysis-card";
 import type { PlanAnalysis } from "./plan-analysis";
+import { LearningObservation } from "./plan-watch";
 
 type Person = { email: string; name: string; role: Role; team: string };
 type Center = { id?: string; owner: string; title: string; followupDate?: string | null };
@@ -15,16 +16,17 @@ const zero = (): Counts => [0, 0];
 const displayDate = (date: string) => date.split("-").reverse().join("/");
 const yearQuarterLabel = (quarter: string) => "Quý " + quarter.slice(-1) + "/" + quarter.slice(0, 4);
 
-export default function KpiPlanner({ day, members, centers, records, plans, email, readOnly, busy, save, open, goPartners, analyze }: {
+export default function KpiPlanner({ day, members, centers, records, plans, email, readOnly, busy, save, open, goPartners, analyze, initialOwner }: {
   day: string; members: Person[]; centers: Center[]; plans: SavedPlan[]; email: string;
   records: PlanningRecord[]; goPartners: () => void;
+  initialOwner?: string;
   analyze: (plan: KpiPlan, owner: string) => Promise<PlanAnalysis>;
   readOnly: boolean; busy: boolean; save: (plan: KpiPlan) => void; open: (id: string, update: boolean) => void;
 }) {
   const current = quarterOf(day);
   const next = current.endsWith("4") ? Number(current.slice(0, 4)) + 1 + "-Q1" : current.slice(0, -1) + (Number(current.slice(-1)) + 1);
   const [quarter, setQuarter] = useState(current);
-  const [emailChoice, setEmailChoice] = useState(email);
+  const [emailChoice, setEmailChoice] = useState(initialOwner ?? email);
   const eligible = members.filter((member): member is Person & { role: Exclude<Role, "intake"> } => member.role !== "intake");
   const member = eligible.find((person) => person.email === emailChoice) ?? eligible[0];
   const quarters = [...new Set([current, next, ...plans.filter((plan) => eligible.some((person) => person.email === plan.owner)).map((plan) => plan.quarter)])].sort();
@@ -222,8 +224,12 @@ function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, 
         </>}
       </div>
     </section>}
-    {(!editable || step === 2) && <OutreachInputs quarter={quarter} settings={plan.settings!}
-      disabled={!editable || busy} change={(settings) => setPlan({ ...plan, settings })} />}
+    {(!editable || step === 2) && <>
+      <LearningObservation day={day} leadDays={plan.settings!.leadDays} centers={centers} records={records} assumedRate={plan.settings!.conversion}
+        apply={editable && !busy ? (conversion) => setPlan({ ...plan, settings: { ...plan.settings!, conversion } }) : undefined} />
+      <OutreachInputs quarter={quarter} settings={plan.settings!}
+        disabled={!editable || busy} change={(settings) => setPlan({ ...plan, settings })} />
+    </>}
     {editable && <div className="toolbar planNavigation">
       <span>Bước {step + 1}/4 · {steps[step]}</span>
       <div className="rowActions">

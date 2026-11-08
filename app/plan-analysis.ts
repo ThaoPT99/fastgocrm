@@ -2,6 +2,7 @@ import { z } from "zod";
 import { requestDeepSeek } from "./deepseek";
 import { defaultOutreach, outreachSchedule, personalTargets, quarterRange, type KpiPlan } from "./kpi-plan";
 import type { Role } from "./crm";
+import type { partnerOutcomes } from "./plan-monitor";
 
 export const analysisOutput = z.object({
   summary: z.string().trim().min(1).max(1200),
@@ -13,7 +14,7 @@ export const analysisOutput = z.object({
 });
 export type PlanAnalysis = z.infer<typeof analysisOutput>;
 
-export async function analyzeKpiPlan(plan: KpiPlan, role: Exclude<Role, "intake">, day: string) {
+export async function analyzeKpiPlan(plan: KpiPlan, role: Exclude<Role, "intake">, day: string, observation?: ReturnType<typeof partnerOutcomes>) {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
   if (!key) return { error: "Chưa cấu hình dịch vụ AI cho hệ thống.", status: 503 } as const;
   const targets = personalTargets(role);
@@ -25,6 +26,11 @@ export async function analyzeKpiPlan(plan: KpiPlan, role: Exclude<Role, "intake"
   const settings = plan.settings ?? defaultOutreach(plan.quarter, day);
   const schedule = outreachSchedule(plan.quarter, day, remaining, settings);
   const numbers = {
+    quanSatThucTe: observation ? {
+      soTrungTamDaDuThoiGian: observation.mature, guiTrongMocCho: observation.timely,
+      guiTre: observation.late, chuaGui: observation.awaiting.length, tyLeGuiTrongMocCho: observation.rate,
+      du20TrungTamTheoDoi: observation.sufficient, chuThich: "Tỷ lệ gửi hồ sơ tiếp nhận trong mốc chờ, không phải tỷ lệ hồ sơ đạt chuẩn. Dữ liệu dựa trên lần liên hệ đầu có ghi nhận trong 90 ngày gần nhất.",
+    } : undefined,
     ngayTinh: day, quy: plan.quarter, thuTuLoaiHoSo: ["D2-6", "D4-1"],
     chiTieu: targets, daDatChuan: plan.actual, nguonConDuKien: sourceCounts, nguonDaXacNhan: confirmed,
     hoSoConThieuNguon: remaining, soNguonQuaHen: plan.sources.filter((source) => source.date < day).length,

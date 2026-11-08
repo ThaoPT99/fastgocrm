@@ -32,6 +32,11 @@ aside { background:#101c32; color:#d3dded; padding:26px 15px; display:flex; flex
 .planAi textarea { width:100%; min-width:0; font-size:16px }
 .planAi h3 { font-size:15px; margin-bottom:6px }
 .planAi button { min-height:44px }
+.planWatch { border-color:#ead3ae; background:#fffdf8 }
+.planWatch .planPriorities > li { align-items:flex-start }
+.planWatch .planPriorities ul { padding-left:20px; margin:8px 0 }
+.planWatch .planPriorities ul li { display:list-item; border:0; border-radius:0; padding:3px 0 }
+.planWatch small { color:#55667e }
 @media(max-width:740px) {
   .dailyGreeting { padding:14px; gap:10px }
   .greetingSun { width:34px; height:34px; border-radius:10px }

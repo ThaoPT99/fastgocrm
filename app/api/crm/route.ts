@@ -8,6 +8,7 @@ import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, stat
 import { personalTargets, planInput, quarterOf } from "../../kpi-plan";
 import { analyzeKpiPlan } from "../../plan-analysis";
 import { contactEvidence, partnerAssistance, weeklyAssistance } from "../../crm-ai";
+import { partnerOutcomes } from "../../plan-monitor";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -239,7 +240,10 @@ export async function POST(request: Request) {
     }
     if (!process.env.DEEPSEEK_API_KEY?.trim()) return json({ error: "Chưa cấu hình dịch vụ AI cho hệ thống." }, 503);
     if (!await allowAccessAttempt("plan-ai:" + ctx.email, 5)) return json({ error: "Bạn đã dùng 5 lượt phân tích trong 10 phút. Hãy thử lại sau." }, 429);
-    const result = await analyzeKpiPlan(data.plan, ctx.salesMode ? "sale" : member.role, today());
+    const observationRows = await ctx.db.select().from(records).where(eq(records.owner, data.owner));
+    const observation = partnerOutcomes(today(), data.plan.settings?.leadDays ?? 14,
+      observationRows.filter((record) => record.kind === "partner"), observationRows);
+    const result = await analyzeKpiPlan(data.plan, ctx.salesMode ? "sale" : member.role, today(), observation);
     return json(result, result.status);
   }
   if (data.action === "kpi-plan") {

@@ -14,6 +14,7 @@ import DailyGreeting from "./daily-greeting";
 import type { PlanAnalysis } from "./plan-analysis";
 import { PartnerAssistant, WeeklyAssistant, type AskAssistant } from "./crm-assistant";
 import type { FollowupUpdate } from "./partner-followup";
+import PlanWatch from "./plan-watch";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
@@ -66,6 +67,7 @@ function followupGroup(date: Entry["followupDate"], day: string): Exclude<Follow
 export default function Dashboard({ name, initialView }: { name: string; initialView: "overview" | "intake" | "workday" }) {
   const [data, setData] = useState<Data>();
   const [selectedView, setView] = useState<View>(initialView);
+  const [planningOwner, setPlanningOwner] = useState<string>();
   const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState<Entry>();
   const [person, setPerson] = useState<Member>();
@@ -424,7 +426,11 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               : "Xem quy trình theo vai trò và cách rà kế hoạch của nhân sự."}</span></div>
           <button onClick={() => changeView("guide")}>Xem hướng dẫn</button>
         </section>}
-        {data && view === "plan" && <KpiPlanner key={viewRole + previewScope} day={day} members={visible} centers={centers} records={rows}
+        {data && (view === "workday" || view === "overview") && !intakeOnly && <PlanWatch day={day} members={visible}
+          centers={centers} records={rows} plans={data.plans ?? []} personal={view === "workday"}
+          openPlan={(owner) => { setPlanningOwner(owner); changeView("plan"); }}
+          openCenter={(id) => openCenter(id, !readOnly)} />}
+        {data && view === "plan" && <KpiPlanner key={viewRole + previewScope + planningOwner} initialOwner={planningOwner} day={day} members={visible} centers={centers} records={rows}
           plans={data.plans ?? []} email={data.email}
           readOnly={readOnly} busy={busy} save={(plan) => void save({ action: "kpi-plan", plan }, "Đã lưu kế hoạch KPI.")}
           open={openCenter} goPartners={() => changeView("partner")} analyze={analyzePlan} />}
