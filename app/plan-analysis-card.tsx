@@ -25,7 +25,7 @@ export default function PlanAnalysisCard({ plan, analyze, unsaved }: {
       <div><h2>Góc nhìn từ trợ lý AI</h2><p>Giải thích mức độ khả thi và gợi ý những việc cần ưu tiên.</p></div>
       <button type="button" disabled={busy} onClick={() => void run()}>{busy ? "Đang phân tích…" : "AI phân tích kế hoạch"}</button>
     </div>
-    <p>Gửi số liệu KPI, nguồn dự kiến và giả định tiếp cận tới DeepSeek khi bạn bấm phân tích.{unsaved && " AI sẽ phân tích theo các thay đổi đang tính thử, chưa lưu."}</p>
+    <p>Gửi số liệu KPI, nguồn dự kiến và giả định tiếp cận tới AI khi bạn bấm phân tích.{unsaved && " AI sẽ phân tích theo các thay đổi đang tính thử, chưa lưu."}</p>
     {error && <p className="notice error" role="alert">{error}</p>}
     {analysis && <div className="aiResult" role="status">
       <p>{analysis.summary}</p>

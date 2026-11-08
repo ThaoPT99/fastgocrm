@@ -15,7 +15,7 @@ export type PlanAnalysis = z.infer<typeof analysisOutput>;
 
 export async function analyzeKpiPlan(plan: KpiPlan, role: Exclude<Role, "intake">, day: string) {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
-  if (!key) return { error: "Chưa cấu hình DeepSeek cho hệ thống.", status: 503 } as const;
+  if (!key) return { error: "Chưa cấu hình dịch vụ AI cho hệ thống.", status: 503 } as const;
   const targets = personalTargets(role);
   const { end } = quarterRange(plan.quarter);
   const validSources = plan.sources.filter((source) => source.date >= day && source.date <= end);

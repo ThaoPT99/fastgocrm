@@ -43,7 +43,7 @@ export function PartnerAssistant({ centerId, ask, apply, disabled }: {
   }
   return <section className="policy planAi partnerAssistant" aria-busy={busy}>
     <h2>Trợ lý đối tác</h2>
-    <p>Khi bấm tạo gợi ý, tên trung tâm, ghi chú và tối đa 30 hoạt động liên hệ, lịch hẹn gần nhất được gửi tới DeepSeek.</p>
+    <p>Khi bấm tạo gợi ý, tên trung tâm, ghi chú và tối đa 30 hoạt động liên hệ, lịch hẹn gần nhất được gửi tới AI.</p>
     <div className="followupFilters aiTabs">{Object.entries(partnerAiModes).map(([key, label]) => <button type="button"
       key={key} disabled={busy || disabled} aria-pressed={mode === key} onClick={() => {
         setMode(key as PartnerAiMode); setNote(""); setResult(undefined); setError("");
@@ -90,7 +90,7 @@ export function WeeklyAssistant({ day, team, canReviewTeam, ask }: {
   }
   return <section className="panel policy planAi">
     <h2>Trợ lý rà công việc và chuẩn bị họp</h2>
-    <p>Gửi số liệu hoạt động, các ghi chú gần nhất và tiến độ KPI trong phạm vi của bạn tới DeepSeek khi bấm phân tích. Dữ liệu chi tiết được rút gọn; có thể đối chiếu đầy đủ ở nhật ký.</p>
+    <p>Gửi số liệu hoạt động, các ghi chú gần nhất và tiến độ KPI trong phạm vi của bạn tới AI khi bấm phân tích. Dữ liệu chi tiết được rút gọn; có thể đối chiếu đầy đủ ở nhật ký.</p>
     <div className="planForm"><div className="formGrid">
       <label>Từ ngày<input type="date" required disabled={busy} max={to || day} value={from} onChange={(event) => { setFrom(event.target.value); setResult(undefined); }} /></label>
       <label>Đến ngày<input type="date" required disabled={busy} min={from} max={day} value={to} onChange={(event) => { setTo(event.target.value); setResult(undefined); }} /></label>

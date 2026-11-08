@@ -237,7 +237,7 @@ export async function POST(request: Request) {
         .where(and(eq(records.kind, "partner"), eq(records.owner, data.owner), inArray(records.id, ids)));
       if (centers.length !== ids.length) return json({ error: "Nguồn dự kiến không thuộc nhân sự đã chọn. Hãy tải lại dữ liệu." }, 400);
     }
-    if (!process.env.DEEPSEEK_API_KEY?.trim()) return json({ error: "Chưa cấu hình DeepSeek cho hệ thống." }, 503);
+    if (!process.env.DEEPSEEK_API_KEY?.trim()) return json({ error: "Chưa cấu hình dịch vụ AI cho hệ thống." }, 503);
     if (!await allowAccessAttempt("plan-ai:" + ctx.email, 5)) return json({ error: "Bạn đã dùng 5 lượt phân tích trong 10 phút. Hãy thử lại sau." }, 429);
     const result = await analyzeKpiPlan(data.plan, ctx.salesMode ? "sale" : member.role, today());
     return json(result, result.status);

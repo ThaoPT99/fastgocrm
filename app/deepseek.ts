@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export async function requestDeepSeek<T>(instruction: string, data: unknown, schema: z.ZodType<T, z.ZodTypeDef, unknown>) {
   const key = process.env.DEEPSEEK_API_KEY?.trim();
-  if (!key) return { error: "Chưa cấu hình DeepSeek cho hệ thống.", status: 503 } as const;
+  if (!key) return { error: "Chưa cấu hình dịch vụ AI cho hệ thống.", status: 503 } as const;
   try {
     const response = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST", signal: AbortSignal.timeout(40_000),
@@ -18,9 +18,9 @@ export async function requestDeepSeek<T>(instruction: string, data: unknown, sch
       }),
     });
     if (!response.ok) {
-      const error = response.status === 402 ? "Tài khoản DeepSeek chưa đủ số dư. Quản trị viên cần kiểm tra tài khoản."
-        : response.status === 401 ? "Khóa DeepSeek không còn hợp lệ. Quản trị viên cần cập nhật cấu hình."
-          : "DeepSeek đang bận hoặc chưa xử lý được yêu cầu. Bạn thử lại sau ít phút.";
+      const error = response.status === 402 ? "Dịch vụ AI chưa đủ số dư. Quản trị viên cần kiểm tra tài khoản."
+        : response.status === 401 ? "Khóa kết nối AI không còn hợp lệ. Quản trị viên cần cập nhật cấu hình."
+          : "Dịch vụ AI đang bận hoặc chưa xử lý được yêu cầu. Bạn thử lại sau ít phút.";
       return { error, status: 503 } as const;
     }
     const body = await response.json();
