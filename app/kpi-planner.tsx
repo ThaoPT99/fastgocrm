@@ -162,7 +162,7 @@ function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, 
       <p>Chỉ tính nguồn còn hiệu lực trong quý. Nguồn đã xác nhận vẫn là dự kiến cho tới khi hồ sơ đạt chuẩn.</p>
     </section>
     <PlanOutreach plan={plan} day={day} remaining={remaining} centers={centers} records={records} editable={editable}
-      change={(settings) => setPlan({ ...plan, settings })} open={(id) => open(id, editable)} goPartners={goPartners} dirty={dirty} />
+      change={(settings) => setPlan({ ...plan, settings })} open={(id) => open(id, false)} goPartners={goPartners} dirty={dirty} />
     {analyze && <PlanAnalysisCard key={JSON.stringify(plan)} plan={plan} analyze={analyze} unsaved={dirty} />}
     {day <= end && gap.some(Boolean) && <section className="panel policy">
       <h2>Việc ưu tiên đề xuất</h2>
@@ -176,8 +176,8 @@ function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, 
           <small>Mốc dự kiến {displayDate(source.date)} · {source.counts[0]} D2-6 · {source.counts[1]} D4-1
             {center.followupDate && " · Follow-up " + displayDate(center.followupDate)}</small>
         </div><button type="button" onClick={() => {
-          if (!dirty || window.confirm("Bạn có thay đổi chưa lưu. Mở đối tác sẽ bỏ các thay đổi này.")) open(source.centerId, editable);
-        }}>{editable ? "Cập nhật đối tác" : "Xem đối tác"}</button></li>;
+          if (!dirty || window.confirm("Bạn có thay đổi chưa lưu. Mở đối tác sẽ bỏ các thay đổi này.")) open(source.centerId, false);
+        }}>Xem tình hình và bước tiếp theo</button></li>;
       })}</ul>}
     </section>}
     {milestones.length > 0 && gap.some(Boolean) && <section className="panel policy">

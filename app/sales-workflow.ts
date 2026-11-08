@@ -2,6 +2,7 @@ import { z } from "zod";
 import { addDays, partnerOutcomes } from "./plan-monitor";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 import type { KpiPlan } from "./kpi-plan";
+import { nextStepGroup, type NextStep } from "./crm";
 
 export const situations = {
   unanswered: { title: "Đối tác chưa phản hồi", content: "Xem lại lần trao đổi gần nhất và kênh đã dùng. Hỏi ngắn xem người phụ trách có thuận tiện trao đổi không. Nếu chưa kết nối được, ghi rõ kết quả và chọn thời điểm liên hệ lại phù hợp." },
@@ -23,7 +24,7 @@ export const supportInput = z.object({
   note: z.string().trim().min(1).max(2000), status: z.enum(supportStatuses).optional(),
 });
 
-type Center = { id?: string; title: string; followupDate?: string | null };
+type Center = NextStep & { id?: string; title: string };
 type Record = { kind: string; partnerId?: string | null; date: string; status: string; intakeChecklist?: IntakeChecklist | null };
 export function prioritizeCenters(day: string, centers: Center[], records: Record[], plan?: KpiPlan) {
   const waiting = new Set(partnerOutcomes(day, plan?.settings?.leadDays ?? 14, centers, records).awaiting.map((center) => center.id));
@@ -31,11 +32,13 @@ export function prioritizeCenters(day: string, centers: Center[], records: Recor
   const nearSources = new Set(plan?.sources.filter((source) => source.date <= addDays(day, 7)).map((source) => source.centerId));
   return centers.flatMap((center) => {
     if (!center.id) return [];
+    if (nextStepGroup(center, day) === "waiting" || nextStepGroup(center, day) === "upcoming") return [];
     const linked = records.filter((record) => record.partnerId === center.id);
     let score = 0;
     const reasons: string[] = [];
-    if (center.followupDate && center.followupDate < day) { score += 100; reasons.push("Follow-up quá hạn " + center.followupDate); }
-    if (center.followupDate === day) { score += 80; reasons.push("Đến lịch liên hệ hôm nay"); }
+    if (nextStepGroup(center, day) === "ask") { score += 100; reasons.push("Đã tới ngày cần hỏi lại để có kết quả"); }
+    else if (center.followupDate && center.followupDate < day) { score += 100; reasons.push("Việc của người phụ trách đã quá hẹn " + center.followupDate); }
+    else if (center.followupDate === day) { score += 80; reasons.push("Đến ngày cần thực hiện"); }
     if (linked.some((record) => record.kind === "meeting" && record.status === "Đã lên lịch" && record.date === day)) { score += 70; reasons.push("Có lịch hẹn hôm nay"); }
     if (waiting.has(center.id)) { score += 50; reasons.push("Đã qua mốc chờ gửi hồ sơ"); }
     if (nearSources.has(center.id)) { score += 40; reasons.push("Nguồn dự kiến đã đến hẹn hoặc sắp đến hẹn"); }

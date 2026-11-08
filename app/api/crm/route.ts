@@ -44,6 +44,9 @@ const recordInput = z.object({
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
   (record.kind !== "logwork" || record.status !== "Cần hỗ trợ" || record.partner.length > 0));
 const command = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("next-step"), centerId: z.string().uuid(), version: z.number().int().positive(),
+    nextOwner: z.enum(["self", "partner", "support", "none"]), nextParty: z.string().trim().max(100),
+    nextAction: z.string().trim().max(180), nextDate: z.union([z.string().date(), z.literal("")]) }),
   z.object({ action: z.literal("support-create"), id: z.string().uuid(), centerId: z.string().uuid(),
     assignedTo: z.string().email(), problem: z.string().trim().min(1).max(2000) }),
   z.object({ action: z.literal("support-reply"), ...supportInput.shape }),
@@ -77,6 +80,9 @@ const command = z.discriminatedUnion("action", [
     channel: z.enum(followupChannels),
     activity: z.string().trim().min(1).max(180),
     result: z.string().trim().min(1).max(4000),
+    performedDate: z.string().date().optional(),
+    nextOwner: z.enum(["self", "partner", "support", "none"]).optional(),
+    nextParty: z.string().trim().max(100).optional(),
     nextAction: z.string().trim().max(180),
     nextDate: z.union([z.string().date(), z.literal("")]),
   }),
@@ -257,7 +263,8 @@ export async function POST(request: Request) {
         .where(and(eq(records.partnerId, center.id), eq(records.kind, "intake"))).get();
       const result = await partnerAssistance(data.mode, {
         ngayHienTai: today(), trungTam: { ten: center.title, tinh: center.province, trangThai: center.status, ghiChu: center.notes.slice(0, 700),
-          viecTiepTheo: center.followupAction, ngayTiepTheo: center.followupDate },
+          viecTiepTheo: center.followupAction, ngayTiepTheo: center.followupDate,
+          nguoiLamBuocTiepTheo: center.nextOwner, nguoiHoTro: center.nextParty },
         lichSu: contactEvidence(history), soBanGhiDuocCungCap: history.length, soHoSoDaTiepNhan: Number(intakeTotal?.count ?? 0),
         ghiChuNguoiDung: data.note, hinhThucNguoiDungChon: data.channel,
       });
@@ -433,31 +440,48 @@ export async function POST(request: Request) {
     return json({ ok: true });
   }
 
-  if (data.demoAs) return json({ error: "Hãy tải lại trang trước khi tiếp tục." }, 403);
+  if ("demoAs" in data && data.demoAs) return json({ error: "Hãy tải lại trang trước khi tiếp tục." }, 403);
   const permitted = ctx.visible.map((member) => member.email);
 
-  if (data.action === "followup") {
+  if (data.action === "followup" || data.action === "next-step") {
+    const nextOwner = data.nextOwner ?? (data.nextDate ? "self" : "none");
     if (Boolean(data.nextAction) !== Boolean(data.nextDate)) {
       return json({ error: "Hãy nhập cả việc cần làm và ngày follow-up, hoặc để trống cả hai." }, 400);
+    }
+    if ((nextOwner === "none") !== !Boolean(data.nextAction) || (nextOwner === "support" && !data.nextParty?.trim())) {
+      return json({ error: "Chọn người làm bước tiếp theo, nội dung, ngày hẹn và tên người hỗ trợ nếu đang chờ hỗ trợ." }, 400);
     }
     const center = await ctx.db.select({ owner: records.owner }).from(records)
       .where(and(eq(records.id, data.centerId), eq(records.kind, "partner"))).get();
     if (!center || !permitted.includes(center.owner)) return json({ error: "Bạn không có quyền cập nhật trung tâm này." }, 403);
+    const nextParty = nextOwner === "support" ? data.nextParty!.trim() : null;
+    if (data.action === "next-step") {
+      const updated = await ctx.db.update(records).set({ nextOwner, nextParty, followupAction: data.nextAction || null,
+        followupDate: data.nextDate || null, version: data.version + 1 })
+        .where(and(eq(records.id, data.centerId), eq(records.kind, "partner"), eq(records.owner, center.owner), eq(records.version, data.version))).returning();
+      return updated.length ? json({ ok: true }) : json({ error: "Trung tâm vừa thay đổi. Hãy tải lại trước khi lưu." }, 409);
+    }
     const now = new Date();
+    const performedDate = data.performedDate ?? today(now);
+    if (performedDate > today(now)) return json({ error: "Ngày thực hiện không được ở tương lai." }, 400);
+    const latest = await ctx.db.select({ date: records.date }).from(records)
+      .where(and(eq(records.partnerId, data.centerId), eq(records.kind, "activity"))).orderBy(desc(records.date)).limit(1);
+    const historicalOnly = Boolean(latest[0] && latest[0].date > performedDate);
     const nextDate = data.nextDate || null;
     const nextAction = data.nextAction || null;
     const condition = "id = ? AND owner = ? AND version = ? AND kind = 'partner'";
     const match = [data.centerId, center.owner, data.version];
     const [activity, updated] = await getClient().batch([
       { sql: `INSERT INTO records
-        (id, kind, title, owner, status, date, partner, partner_id, notes, followup_date, followup_action, logged_at, performed_by)
-        SELECT ?, 'activity', ?, owner, ?, ?, title, id, ?, ?, ?, ?, ? FROM records WHERE ${condition}`,
-        args: [crypto.randomUUID(), data.activity, data.channel, today(now), data.result, nextDate, nextAction, now.toISOString(), ctx.email, ...match] },
-      { sql: `UPDATE records SET followup_date = ?, followup_action = ?, version = version + 1 WHERE ${condition}`,
-        args: [nextDate, nextAction, ...match] },
+        (id, kind, title, owner, status, date, partner, partner_id, notes, followup_date, followup_action, logged_at, performed_by, next_owner, next_party)
+        SELECT ?, 'activity', ?, owner, ?, ?, title, id, ?, ?, ?, ?, ?, ?, ? FROM records WHERE ${condition}`,
+        args: [crypto.randomUUID(), data.activity, data.channel, performedDate, data.result, nextDate, nextAction, now.toISOString(), ctx.email, nextOwner, nextParty, ...match] },
+      historicalOnly ? { sql: `UPDATE records SET version = version + 1 WHERE ${condition}`, args: match }
+        : { sql: `UPDATE records SET followup_date = ?, followup_action = ?, next_owner = ?, next_party = ?, version = version + 1 WHERE ${condition}`,
+          args: [nextDate, nextAction, nextOwner, nextParty, ...match] },
     ], "write");
     return activity.rowsAffected === 1 && updated.rowsAffected === 1
-      ? json({ ok: true }) : json({ error: "Hồ sơ vừa thay đổi. Hãy tải lại để xem lịch follow-up mới nhất." }, 409);
+      ? json({ ok: true, historicalOnly }) : json({ error: "Hồ sơ vừa thay đổi. Hãy tải lại để xem lịch follow-up mới nhất." }, 409);
   }
 
   if (data.action === "remove") {

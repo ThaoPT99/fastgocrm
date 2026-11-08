@@ -5,6 +5,7 @@ type EvidenceRecord = {
   kind: string; title: string; date: string; notes: string; status: string;
   followupAction: string | null; followupDate: string | null;
   partner?: string;
+  nextOwner?: string | null; nextParty?: string | null;
 };
 export function contactEvidence(records: EvidenceRecord[]) {
   return records.filter((record) => record.kind === "activity" || record.kind === "meeting" || record.kind === "logwork")
@@ -13,6 +14,7 @@ export function contactEvidence(records: EvidenceRecord[]) {
       loai: record.kind, ngay: record.date, noiDung: record.title.slice(0, 180), ketQua: record.notes.slice(0, 700),
       trangThai: record.status, viecTiepTheo: record.followupAction, ngayTiepTheo: record.followupDate,
       vuongMac: record.kind === "logwork" ? record.partner?.slice(0, 700) : undefined,
+      nguoiLamBuocTiepTheo: record.nextOwner, nguoiHoTro: record.nextParty,
     }));
 }
 

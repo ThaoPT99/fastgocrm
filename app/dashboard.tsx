@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { categories, needsPartner, partnerActivityKinds, roles, statuses, today, type Kind, type Role } from "./crm";
+import { categories, needsPartner, nextOwnerOf, nextOwners, partnerActivityKinds, roles, statuses, today, type Kind, type Role, type NextOwner } from "./crm";
 import KpiPolicy from "./kpi-policy";
 import KpiPlanner from "./kpi-planner";
 import { quarterOf, type KpiPlan } from "./kpi-plan";
@@ -20,9 +20,11 @@ import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 import ContactPriorities from "./contact-priorities";
 import { PartnerSupport, SituationGuide } from "./partner-tools";
 import type { Playbook, SupportRequest } from "./sales-workflow";
+import WorkNextSteps from "./work-next-steps";
+import { NextStepEditor } from "./next-step";
 
 type Member = { email: string; name: string; team: string; role: Role };
-type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; province?: string | null; partnerId?: string | null; notes: string; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
+type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; province?: string | null; partnerId?: string | null; notes: string; nextOwner?: NextOwner | null; nextParty?: string | null; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
 type Data = { members: Member[]; records: Entry[]; plans: (KpiPlan & { owner: string })[]; support: SupportRequest[]; supportContacts: Member[]; guides: Playbook[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
 type View = "overview" | "workday" | "people" | "kpi" | "plan" | "guide" | Kind;
 
@@ -60,7 +62,8 @@ function crmHeaders(json = false) {
 }
 const overdue = (entry: Entry) => entry.kind === "task" && entry.date < today() && entry.status !== "Hoàn tất";
 const timeLabel = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit" });
-const activityWhen = (entry: Entry) => entry.loggedAt ? entry.date + " · " + timeLabel.format(new Date(entry.loggedAt)) : entry.date;
+const activityWhen = (entry: Entry) => entry.loggedAt && today(new Date(entry.loggedAt)) === entry.date
+  ? entry.date + " · " + timeLabel.format(new Date(entry.loggedAt)) : entry.date;
 const followupFilters = { all: "Tất cả", late: "Quá hạn", today: "Đến hẹn hôm nay", upcoming: "Sắp tới", none: "Chưa đặt lịch" };
 type FollowupFilter = keyof typeof followupFilters;
 function followupGroup(date: Entry["followupDate"], day: string): Exclude<FollowupFilter, "all"> {
@@ -78,7 +81,6 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const [query, setQuery] = useState("");
   const [centerId, setCenterId] = useState<string>();
   const [centerOrigin, setCenterOrigin] = useState<View>();
-  const [contactSession, setContactSession] = useState<string[]>([]);
   const [updatingCenter, setUpdatingCenter] = useState(false);
   const [followupDraft, setFollowupDraft] = useState<{ value: FollowupUpdate; revision: number }>();
   const [followupFilter, setFollowupFilter] = useState<FollowupFilter>("all");
@@ -136,7 +138,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     setMessage("");
     try {
       const res = await fetch("/api/crm", { method: "POST", headers: crmHeaders(true), body: JSON.stringify(payload) });
-      const body = await res.json() as { error?: string };
+      const body = await res.json() as { error?: string; historicalOnly?: boolean };
       if (!res.ok) throw new Error(body.error || "Không lưu được dữ liệu.");
       if (signInAgain) {
         window.location.reload();
@@ -149,7 +151,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         setUpdatingCenter(false);
         setFollowupDraft(undefined);
       }
-      setMessage(notice);
+      setMessage(body.historicalOnly ? "Đã ghi hoạt động ngày cũ vào lịch sử. Bước tiếp theo dùng bản cập nhật mới hơn." : notice);
       closePinForm();
       await refresh();
       return true;
@@ -231,7 +233,6 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   }
 
   function changeView(next: View) {
-    setContactSession([]);
     setFollowupDraft(undefined);
     setMenuOpen(false);
     setView(next);
@@ -276,8 +277,6 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const intakeCenters = data?.intakeCenters ?? [];
   const centersById = new Map(centers.map((entry) => [entry.id, entry]));
   const selectedCenter = centerId ? centersById.get(centerId) : undefined;
-  const contactPosition = selectedCenter?.id ? contactSession.indexOf(selectedCenter.id) : -1;
-  const nextContact = contactPosition >= 0 ? contactSession.slice(contactPosition + 1).find((id) => centersById.has(id)) : undefined;
   const linkedCenterName = (entry: Entry) => centersById.get(entry.partnerId ?? undefined)?.title
     ?? intakeCenters.find((center) => center.id === entry.partnerId)?.title ?? entry.partner;
   const intakeRows = view === "intake" ? rows.filter((entry) => entry.kind === "intake") : [];
@@ -312,7 +311,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   for (const activity of rows) {
     if (activity.kind !== "activity" || !activity.partnerId) continue;
     const last = latestContact.get(activity.partnerId);
-    if (!last || (activity.loggedAt ?? activity.date) >= (last.loggedAt ?? last.date)) latestContact.set(activity.partnerId, activity);
+    if (!last || activity.date > last.date || (activity.date === last.date && (activity.loggedAt ?? "") >= (last.loggedAt ?? ""))) latestContact.set(activity.partnerId, activity);
   }
   const lateCenters = centers.filter((center) => followupGroup(center.followupDate, day) === "late");
   const filtered = rows.filter((entry) => entry.kind === view &&
@@ -443,16 +442,17 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         {data && (view === "workday" || view === "overview") && !intakeOnly && <PlanWatch day={day} members={visible}
           centers={centers} records={rows} plans={data.plans ?? []} personal={view === "workday"}
           openPlan={(owner) => { setPlanningOwner(owner); changeView("plan"); }}
-          openCenter={(id) => openCenter(id, !readOnly)} />}
+          openCenter={(id) => openCenter(id)} />}
         {data && view === "plan" && <KpiPlanner key={viewRole + previewScope + planningOwner} initialOwner={planningOwner} day={day} members={visible} centers={centers} records={rows}
           plans={data.plans ?? []} email={data.email}
           readOnly={readOnly} busy={busy} save={(plan) => void save({ action: "kpi-plan", plan }, "Đã lưu kế hoạch KPI.")}
           open={openCenter} goPartners={() => changeView("partner")} analyze={analyzePlan} />}
         {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "workday" && <>
+          <WorkNextSteps day={day} centers={centers} open={(id) => openCenter(id)} />
           <ContactPriorities day={day} centers={centers} records={rows}
             plan={data.plans?.find((plan) => plan.owner === (previewRole ? previewScope : data.email) && plan.quarter === quarterOf(day))}
-            start={(id, ids) => { openCenter(id); setContactSession(ids); }} />
+            open={(id) => openCenter(id)} />
           <TodayPlan day={day} plan={data.plans?.find((plan) => plan.owner === (previewRole ? previewScope : data.email) && plan.quarter === quarterOf(day))}
             centers={centers} records={rows} goPlan={() => changeView("plan")} goPartners={() => changeView("partner")} />
           <div className="toolbar">
@@ -464,13 +464,6 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             </div>
           </div>
           <div className="salesQueues">
-            <SalesQueue title="Follow-up cần xử lý" empty="Không có follow-up đến hạn hoặc quá hạn." items={centers
-              .filter((center) => center.followupDate && center.followupDate <= day)
-              .sort((a, b) => (a.followupDate ?? "").localeCompare(b.followupDate ?? ""))
-              .map((center) => ({ id: center.id!, title: center.title,
-                detail: [center.followupAction, center.followupDate].filter(Boolean).join(" · "),
-                badge: center.followupDate! < day ? "Quá hạn" : "Hôm nay", urgent: center.followupDate! < day,
-                open: () => openCenter(center.id, !readOnly) }))} />
             <SalesQueue title="Lịch hẹn cần xử lý" empty="Không có lịch hẹn đang mở đến hôm nay." items={rows
               .filter((entry) => entry.kind === "meeting" && entry.status === "Đã lên lịch" && entry.date <= day)
               .map((entry) => ({ id: entry.id!, title: entry.title,
@@ -484,14 +477,6 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               return [{ id: entry.id!, title: entry.title, detail: linkedCenterName(entry) || "Chưa liên kết trung tâm",
                 badge: "Thiếu " + (total - completed) + " mục", urgent: true, open: () => openFromWorkday(entry) }];
             })} />
-            <SalesQueue title="Đối tác chưa đặt follow-up" empty={centers.length ? "Mọi đối tác đều đã có lịch follow-up." : "Chưa có trung tâm. Thêm trung tâm để bắt đầu theo dõi."} items={centers
-              .filter((center) => !center.followupDate)
-              .map((center) => {
-                const last = latestContact.get(center.id ?? "");
-                return { id: center.id!, title: center.title,
-                  detail: last ? "Lần liên hệ gần nhất · " + last.date : "Chưa ghi nhận liên hệ",
-                  open: () => openCenter(center.id, !readOnly) };
-              })} />
           </div>
         </>}
         {data && (view === "workday" || view === "overview") && (data.support ?? []).some((request) => request.status !== "Đã giải quyết" && centersById.has(request.centerId)) &&
@@ -511,7 +496,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           canReviewTeam={viewRole === "head" || viewRole === "lead"} ask={askAssistant} openCenter={(id) => openCenter(id)} />}
         {data && view === "logwork" && logMode === "day" && <section className="panel">
           <div className="sectionHead">
-            <div><h2>Hoạt động theo ngày</h2><p>Cập nhật đối tác tự vào nhật ký của người thao tác. Mỗi người có thể ghi thêm từng hoạt động nội bộ trong ngày.</p></div>
+            <div><h2>Hoạt động theo ngày</h2><p>Kết quả trao đổi được ghi vào nhật ký của người thực hiện theo đúng ngày đã làm. Mỗi người có thể ghi thêm hoạt động nội bộ.</p></div>
             <div className="logFilters">
               <label>Ngày <input type="date" required value={logDate} onChange={(event) => {
                 if (event.target.value) { setLogDate(event.target.value); setDraft(undefined); }
@@ -608,22 +593,12 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               if (centerOrigin) changeView(centerOrigin);
               else { setCenterId(undefined); setUpdatingCenter(false); }
             }}>{centerOrigin ? "Về " + views[centerOrigin] : "Đóng hồ sơ"}</button>
-              {!readOnly && <button className="primary" disabled={busy || updatingCenter} onClick={() => { setDraft(undefined); setFollowupDraft(undefined); setUpdatingCenter(true); }}>Cập nhật đối tác</button>}</div></div>
-          {contactPosition >= 0 && <div className="toolbar contactSession">
-            <span>Lượt liên hệ {contactPosition + 1}/{contactSession.length} · Chuẩn bị trao đổi, ghi kết quả và chọn bước tiếp theo.</span>
-            {nextContact ? <button disabled={busy} onClick={() => {
-              if (updatingCenter && !window.confirm("Biểu mẫu đang mở. Chuyển trung tâm sẽ bỏ phần cập nhật chưa lưu.")) return;
-              const ids = contactSession;
-              openCenter(nextContact); setContactSession(ids);
-            }}>Chuyển sang trung tâm tiếp theo</button> : <button disabled={busy} onClick={() => {
-              if (updatingCenter && !window.confirm("Biểu mẫu đang mở. Kết thúc lượt sẽ bỏ phần cập nhật chưa lưu.")) return;
-              changeView("workday");
-            }}>Kết thúc lượt, về Việc hôm nay</button>}
-          </div>}
-          <div className="currentFollowup"><b>Follow-up tiếp theo</b>
+              {!readOnly && <button className="primary" disabled={busy || updatingCenter} onClick={() => { setDraft(undefined); setFollowupDraft(undefined); setUpdatingCenter(true); }}>Ghi kết quả trao đổi</button>}</div></div>
+          <div className="currentFollowup"><b>{nextOwners[nextOwnerOf(selectedCenter)]}{selectedCenter.nextParty && " · " + selectedCenter.nextParty}</b>
             {selectedCenter.followupDate ? <span>{selectedCenter.followupAction} · <span className={followupGroup(selectedCenter.followupDate, day) === "late" ? "pill danger" : "pill"}>{selectedCenter.followupDate}</span></span>
               : <span>Chưa đặt lịch</span>}
           </div>
+          {!readOnly && <NextStepEditor key={selectedCenter.id + ":step:" + selectedCenter.version} center={selectedCenter} save={save} disabled={busy || updatingCenter} />}
           {!readOnly && <PartnerAssistant key={selectedCenter.id + ":" + selectedCenter.version} centerId={selectedCenter.id!} ask={askAssistant} disabled={busy} apply={(value) => {
             if (updatingCenter && !window.confirm("Bạn đang mở biểu mẫu cập nhật. Thay nội dung bằng bản nháp AI?")) return;
             setDraft(undefined);
@@ -632,20 +607,16 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           }} />}
           <SituationGuide key={selectedCenter.id + ":guide"} team={people.get(selectedCenter.owner)?.team ?? ""} guides={data.guides ?? []}
             manager={viewRole === "head" || viewRole === "lead"} readOnly={readOnly} save={save} busy={busy} />
-          {updatingCenter && <PartnerFollowup key={selectedCenter.id + ":" + (followupDraft?.revision ?? 0)} initial={followupDraft?.value} nextAction={selectedCenter.followupAction} nextDate={selectedCenter.followupDate} busy={busy}
-            hasNext={Boolean(nextContact)}
+          {updatingCenter && <PartnerFollowup key={selectedCenter.id + ":" + (followupDraft?.revision ?? 0)} initial={followupDraft?.value} nextAction={selectedCenter.followupAction} nextDate={selectedCenter.followupDate}
+            nextOwner={selectedCenter.nextOwner} nextParty={selectedCenter.nextParty} busy={busy}
             onCancel={() => setUpdatingCenter(false)}
-            onSave={async (update, advance) => {
-              const ids = contactSession;
-              const saved = await save({ action: "followup", centerId: selectedCenter.id, version: selectedCenter.version, ...update }, "Đã lưu hoạt động và cập nhật follow-up.");
-              if (saved && advance && nextContact) { openCenter(nextContact); setContactSession(ids); }
-            }} />}
+            onSave={(update) => void save({ action: "followup", centerId: selectedCenter.id, version: selectedCenter.version, ...update }, "Đã lưu kết quả và bước tiếp theo.")} />}
           <PartnerSupport key={selectedCenter.id + ":support"} centerId={selectedCenter.id!} ownerTeam={people.get(selectedCenter.owner)?.team ?? ""}
             requests={(data.support ?? []).filter((request) => request.centerId === selectedCenter.id)} contacts={data.supportContacts ?? []}
             people={visible} role={viewRole} readOnly={readOnly} save={save} busy={busy} />
           <div className="centerTimeline">{(["activity", ...partnerActivityKinds.filter((kind) => kind !== "activity")] as const).map((kind) => {
             const linked = rows.filter((entry) => entry.partnerId === selectedCenter.id && entry.kind === kind)
-              .sort((a, b) => (b.loggedAt ?? b.date).localeCompare(a.loggedAt ?? a.date));
+              .sort((a, b) => b.date.localeCompare(a.date) || (b.loggedAt ?? "").localeCompare(a.loggedAt ?? ""));
             return <section key={kind}>
               <div className="sectionHead"><h2>{kind === "activity" ? "Lịch sử hoạt động" : kind === "task" ? "Công việc đã ghi" : categories[kind]} <span className="pill">{linked.length}</span></h2>
                 {!readOnly && (kind === "meeting" || kind === "intake") && <button disabled={busy} onClick={() => { changeView(kind); startEntry(kind, selectedCenter.owner, selectedCenter.id); }}>+ Thêm {itemLabels[kind]}</button>}</div>
@@ -709,6 +680,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             const missing = progress ? progress.total - progress.completed : 0;
             return <tr key={entry.id}><td>
             {entry.kind === "partner" ? <button className="textButton" onClick={() => openCenter(entry.id)}>{entry.title}</button> : <b>{entry.title}</b>}
+            {entry.kind === "partner" && <small>{nextOwners[nextOwnerOf(entry)]}{entry.nextParty && " · " + entry.nextParty}</small>}
             {entry.kind === "partner" && entry.province && <small>{entry.province}</small>}
             {entry.partnerId ? <small>{intakeOnly ? linkedCenterName(entry) : <button className="textButton" onClick={() => openCenter(entry.partnerId ?? undefined)}>{linkedCenterName(entry)}</button>}</small> :
               needsPartner(entry.kind) ? <small>Chưa liên kết trung tâm{entry.partner && " · " + entry.partner}</small> : entry.partner && <small>{entry.partner}</small>}
@@ -720,7 +692,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               <IntakeChecklistFields value={entry.intakeChecklist} /></details>}</td><td data-label="Phụ trách">{people.get(entry.owner)?.name}</td>
             <td data-label={view === "partner" ? "Follow-up" : "Ngày"}>{view === "partner" ? entry.followupDate ? <><span className={followupGroup(entry.followupDate, day) === "late" ? "pill danger" : "pill"}>{entry.followupDate}</span><small>{entry.followupAction}</small></> : "Chưa đặt lịch" : entry.date}</td>
             <td data-label="Trạng thái"><span className={overdue(entry) ? "pill danger" : "pill"}>{overdue(entry) ? "Quá hạn" : entry.status}</span></td>
-            {!readOnly && <td className="rowActions">{view === "partner" && <button disabled={busy} onClick={() => openCenter(entry.id, true)}>Cập nhật đối tác</button>}
+            {!readOnly && <td className="rowActions">{view === "partner" && <button disabled={busy} onClick={() => openCenter(entry.id, true)}>Ghi kết quả trao đổi</button>}
               {!entry.loggedAt && <><button disabled={busy} onClick={() => { setUpdatingCenter(false); setDraft(entry); }}>{entry.kind === "intake" ? "Cập nhật số lượng" : "Sửa"}</button>{!intakeOnly && <button disabled={busy} onClick={() => { if (window.confirm("Xóa bản ghi này?")) void save({ action: "remove", id: entry.id, version: entry.version }, "Đã xóa bản ghi."); }}>Xóa</button>}</>}
             </td>}</tr>;
           })}

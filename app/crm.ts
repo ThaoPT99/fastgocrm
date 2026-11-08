@@ -8,6 +8,18 @@ export const categories = {
 } as const;
 
 export const followupChannels = ["Cuộc gọi", "Cuộc gặp", "Tin nhắn", "Gửi tài liệu", "Khác"] as const;
+export const nextOwners = { self: "Người phụ trách trung tâm", partner: "Chờ đối tác", support: "Chờ người hỗ trợ", none: "Chưa có bước tiếp theo" } as const;
+export type NextOwner = keyof typeof nextOwners;
+export type NextStep = { nextOwner?: NextOwner | null; nextParty?: string | null; followupDate?: string | null; followupAction?: string | null };
+export function nextOwnerOf(step: NextStep): NextOwner {
+  return step.nextOwner ?? (step.followupDate ? "self" : "none");
+}
+export function nextStepGroup(step: NextStep, day: string) {
+  const owner = nextOwnerOf(step);
+  if (owner === "none") return "unplanned";
+  if (owner !== "self") return step.followupDate && step.followupDate <= day ? "ask" : "waiting";
+  return step.followupDate && step.followupDate > day ? "upcoming" : "mine";
+}
 
 export const statuses = {
   partner: ["Tiềm năng", "Đang trao đổi", "Đang hợp tác"],

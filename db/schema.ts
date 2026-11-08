@@ -31,6 +31,8 @@ export const records = sqliteTable("records", {
   partnerId: text("partner_id").references((): AnySQLiteColumn => records.id, { onDelete: "restrict" }),
   followupDate: text("followup_date"),
   followupAction: text("followup_action"),
+  nextOwner: text("next_owner", { enum: ["self", "partner", "support", "none"] }),
+  nextParty: text("next_party"),
   loggedAt: text("logged_at"),
   performedBy: text("performed_by"),
   intakeChecklist: text("intake_checklist", { mode: "json" }).$type<IntakeChecklist>(),
