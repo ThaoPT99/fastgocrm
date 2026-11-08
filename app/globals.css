@@ -11,6 +11,7 @@ aside { background:#101c32; color:#d3dded; padding:26px 15px; display:flex; flex
 .brand { display:flex; gap:11px; align-items:center; color:#fff; font-size:20px; margin:0 7px 24px; font-weight:750; letter-spacing:-.5px }
 .brand b { display:grid; place-items:center; background:#426bf0; width:40px; height:40px; border-radius:12px; color:#fff }
 .brand strong { color:#a5bbff }
+.mobileMenu { display:none }
 .brand small,.navLabel { display:block; letter-spacing:.1em; font-size:9px; color:#9eafc9; font-weight:750 }
 .navLabel { padding:0 10px }
 nav { display:grid; gap:5px }
@@ -208,4 +209,61 @@ summary { cursor:pointer; color:#3658ba }
 @media (max-width:740px) {
   .salesQueues { grid-template-columns:minmax(0,1fr); gap:10px }
   .salesQueueItem { padding:10px 12px }
+}
+
+/* Keep small-screen layouts contained and make actions usable with touch. */
+.shell > main,.content,.panel,.guidedPlan,.tableWrap { min-width:0 }
+@media (max-width:740px) {
+  .brandRow { display:flex; justify-content:space-between; align-items:center; gap:12px }
+  .brandRow .brand { margin:0; font-size:18px }
+  .brandRow .brand b { width:34px; height:34px; border-radius:10px }
+  .mobileMenu { display:block; min-height:44px; flex:none; color:#fff; background:#263961; border-color:#354c7c }
+  .shell .workspaceNav { display:none }
+  .shell .workspaceNav.menuOpen { display:grid; grid-template-columns:minmax(0,1fr); gap:14px; padding:8px 0 4px }
+  .shell .navGroup { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; border:0; padding:0; min-width:0 }
+  .shell .navGroup .navLabel { display:block; grid-column:1/-1; padding:0 6px; margin-bottom:3px }
+  .shell nav button { width:100%; min-width:0; text-align:left }
+  .top { align-items:flex-start; gap:6px }
+  .top > span { width:100%; overflow-wrap:anywhere }
+  .top > div { display:flex; align-items:center; flex-wrap:wrap; gap:4px 10px; width:100% }
+  .top .textButton { min-height:36px }
+  .heading { align-items:flex-start }
+  .heading > div,.sectionHead > div,.toolbar > div { min-width:0; max-width:100% }
+  h1 { font-size:28px; line-height:1.2 }
+  h2 { line-height:1.4; overflow-wrap:anywhere }
+  .policy { padding:14px }
+  .panel p { line-height:1.6; overflow-wrap:anywhere }
+  .rowActions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; white-space:normal; max-width:100% }
+  .rowActions button + button { margin:0 }
+  .rowActions button,.actions button { min-height:44px; white-space:normal }
+  .actions { justify-content:stretch }
+  .actions button { flex:1 1 110px }
+  .toolbar { align-items:stretch; padding:12px; gap:12px }
+  .toolbar > label,.toolbar > span,.toolbar > div { width:100%; min-width:0 }
+  .toolbar > label { display:grid; gap:6px }
+  .toolbar select { width:100%; margin:0 }
+  .toolbar .rowActions { display:flex; width:100% }
+  .toolbar .rowActions button { flex:1 1 130px }
+  .startHere > button { width:100% }
+  .form input:not([type=checkbox]),.form select,.form textarea,
+  .planForm input,.planForm select,.planPriorities select { width:100%; max-width:100%; font-size:16px; min-height:44px }
+  .planForm .formGrid { grid-template-columns:minmax(0,1fr) }
+  .planForm label { line-height:1.5 }
+  .planSteps { grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px }
+  .planSteps li { min-width:0; align-items:flex-start; font-size:12px; padding:8px }
+  .planSteps li span { flex:none }
+  .planNavigation { position:static; box-shadow:none; margin-bottom:0 }
+  .planPriorities li { display:grid; grid-template-columns:minmax(0,1fr) }
+  .planPriorities label { display:grid; gap:6px; min-width:0 }
+  .planPriorities button { min-height:44px; width:100%; white-space:normal }
+  .salesQueueItem { align-items:flex-start; flex-wrap:wrap }
+  .salesQueueItem > span:first-child { flex:1 1 180px }
+  .pill { max-width:100%; white-space:normal; overflow-wrap:anywhere }
+  .tableWrap { max-width:100%; overscroll-behavior-x:contain }
+  .policy .mobileCards { padding:0 }
+  .policy .mobileCards th[scope=row] { display:block; white-space:normal; padding:10px 12px; color:#28469d; background:#f0f5ff }
+  .logFilters { width:100%; align-items:stretch }
+  .logFilters label { display:grid; gap:5px; flex:1 1 130px; min-width:0 }
+  .logFilters input,.logFilters select { width:100%; min-height:44px; font-size:16px }
+  .guideSteps li { padding:10px; gap:8px }
 }

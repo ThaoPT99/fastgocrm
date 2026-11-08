@@ -41,14 +41,14 @@ export default function KpiPlanner({ day, members, centers, records, plans, emai
     </section>
     {eligible.length > 1 && <section className="panel policy">
       <h2>Kế hoạch của nhân sự</h2>
-      <div className="tableWrap"><table>
+      <div className="tableWrap mobileCards"><table>
         <thead><tr><th>Nhân sự</th><th>D2-6 đạt chuẩn / KPI</th><th>D4-1 đạt chuẩn / KPI</th><th>Kế hoạch</th></tr></thead>
         <tbody>{eligible.map((person) => {
           const personPlan = plans.find((plan) => plan.owner === person.email && plan.quarter === activeQuarter);
           const targets = personalTargets(person.role);
           return <tr key={person.email}>
-            <th>{person.name}{person.team && " · " + person.team}</th>
-            {targets.map((target, index) => <td key={programs[index]}>{personPlan ? personPlan.actual[index] + " / " + target : "Chưa có số liệu"}</td>)}
+            <th scope="row">{person.name}{person.team && " · " + person.team}</th>
+            {targets.map((target, index) => <td data-label={programs[index] + " đạt chuẩn / KPI"} key={programs[index]}>{personPlan ? personPlan.actual[index] + " / " + target : "Chưa có số liệu"}</td>)}
             <td><button type="button" onClick={() => setEmailChoice(person.email)}>{personPlan ? "Xem kế hoạch" : "Chưa lập"}</button></td>
           </tr>;
         })}</tbody>
@@ -145,11 +145,11 @@ function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, 
     {(!editable || step === 3) && <><section className="panel policy">
       <h2>Mức độ đủ nguồn</h2>
       {!saved && <p>Kế hoạch đang tính thử, chưa được lưu.</p>}
-      <div className="tableWrap"><table>
+      <div className="tableWrap mobileCards"><table>
         <thead><tr><th>Loại hồ sơ</th><th>KPI</th><th>Đạt chuẩn đã xác nhận</th><th>Còn thiếu</th><th>Nguồn đã xác nhận</th><th>Nguồn chưa xác nhận</th><th>Còn thiếu nguồn</th></tr></thead>
         <tbody>{programs.map((program, index) => <tr key={program}>
-          <th>{program}</th><td>{targets[index]}</td><td>{plan.actual[index]}</td><td>{gap[index]}</td>
-          <td>{covered(index, true)}</td><td>{covered(index, false) - covered(index, true)}</td><td><b>{remaining[index]}</b></td>
+          <th scope="row">{program}</th><td data-label="KPI">{targets[index]}</td><td data-label="Đạt chuẩn đã xác nhận">{plan.actual[index]}</td><td data-label="Còn thiếu">{gap[index]}</td>
+          <td data-label="Nguồn đã xác nhận">{covered(index, true)}</td><td data-label="Nguồn chưa xác nhận">{covered(index, false) - covered(index, true)}</td><td data-label="Còn thiếu nguồn"><b>{remaining[index]}</b></td>
         </tr>)}</tbody>
       </table></div>
       <p>Chỉ tính nguồn còn hiệu lực trong quý. Nguồn đã xác nhận vẫn là dự kiến cho tới khi hồ sơ đạt chuẩn.</p>
@@ -175,10 +175,10 @@ function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, 
     {milestones.length > 0 && gap.some(Boolean) && <section className="panel policy">
       <h2>Mốc hồ sơ cần đạt mỗi tuần</h2>
       <p>CRM phân bổ phần KPI còn thiếu qua các tuần còn lại, kể cả tuần cuối chưa đủ ngày.</p>
-      <div className="tableWrap"><table>
+      <div className="tableWrap mobileCards"><table>
         <thead><tr><th>Tuần kết thúc</th>{programs.map((program) => <th key={program}>{program}</th>)}</tr></thead>
-        <tbody>{milestones.map((milestone) => <tr key={milestone.date}><td>{displayDate(milestone.date)}</td>
-          {milestone.counts.map((count, index) => <td key={programs[index]}>{count}</td>)}</tr>)}</tbody>
+        <tbody>{milestones.map((milestone) => <tr key={milestone.date}><th scope="row">Tuần kết thúc {displayDate(milestone.date)}</th>
+          {milestone.counts.map((count, index) => <td data-label={programs[index]} key={programs[index]}>{count}</td>)}</tr>)}</tbody>
       </table></div>
     </section>}
     </>}

@@ -62,6 +62,7 @@ function followupGroup(date: Entry["followupDate"], day: string): Exclude<Follow
 export default function Dashboard({ name, initialView }: { name: string; initialView: "overview" | "intake" | "workday" }) {
   const [data, setData] = useState<Data>();
   const [selectedView, setView] = useState<View>(initialView);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [draft, setDraft] = useState<Entry>();
   const [person, setPerson] = useState<Member>();
   const [query, setQuery] = useState("");
@@ -191,6 +192,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   }
 
   function changeView(next: View) {
+    setMenuOpen(false);
     setView(next);
     setCenterId(undefined);
     setCenterOrigin(undefined);
@@ -330,8 +332,10 @@ export default function Dashboard({ name, initialView }: { name: string; initial
 
   return <div className="shell">
     <aside>
-      <div className="brand"><b>F</b><div>Fastgo <strong>CRM</strong><small>KINH DOANH B2B</small></div></div>
-      <nav className="workspaceNav" aria-label="Điều hướng chính">{groups.map((group) =>
+      <div className="brandRow"><div className="brand"><b>F</b><div>Fastgo <strong>CRM</strong><small>KINH DOANH B2B</small></div></div>
+        <button type="button" className="mobileMenu" aria-expanded={menuOpen} aria-controls="workspace-menu"
+          onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? "Đóng menu" : "☰ Menu"}</button></div>
+      <nav id="workspace-menu" className={menuOpen ? "workspaceNav menuOpen" : "workspaceNav"} aria-label="Điều hướng chính">{groups.map((group) =>
         <div className="navGroup" key={group.label}><span className="navLabel">{group.label}</span>
           {group.items.filter((key) => key !== "workday" || showWorkday).map((key) =>
             <button key={key} aria-current={key === view ? "page" : undefined} onClick={() => changeView(key)}><span aria-hidden="true">{icons[key]}</span>{views[key]}</button>)}

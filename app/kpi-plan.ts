@@ -74,7 +74,7 @@ export function outreachSchedule(quarter: string, day: string, gap: readonly num
   const centers = gap.map((count) => Math.ceil(count / settings.filesPerCenter));
   const contacts = centers.map((count) => Math.ceil(count * 100 / settings.conversion));
   const total = contacts.reduce((sum, count) => sum + count, 0);
-  const weeks = new Map<string, { date: string; contacts: number[]; days: number }>();
+  const weeks = new Map<string, { date: string; from: string; through: string; contacts: number[]; days: number }>();
   let allocatedD26 = 0;
   let allocated = 0;
   for (const [index, date] of days.entries()) {
@@ -83,7 +83,8 @@ export function outreachSchedule(quarter: string, day: string, gap: readonly num
     const d26 = cumulativeD26 - allocatedD26;
     const weekEnd = shiftDay(date, 7 - new Date(date + "T00:00:00Z").getUTCDay());
     const key = weekEnd > end ? end : weekEnd;
-    const week = weeks.get(key) ?? { date: key, contacts: [0, 0], days: 0 };
+    const week = weeks.get(key) ?? { date: key, from: date, through: date, contacts: [0, 0], days: 0 };
+    week.through = date;
     week.contacts[0] += d26;
     week.contacts[1] += cumulative - allocated - d26;
     week.days++;

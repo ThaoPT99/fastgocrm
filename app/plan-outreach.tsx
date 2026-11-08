@@ -14,8 +14,8 @@ export function OutreachInputs({ quarter, settings, change, disabled }: {
     <fieldset className="planForm planFieldset" disabled={disabled}><div className="formGrid">
       <label>Ngày bắt đầu tiếp cận<input type="date" required min={start} max={end} value={settings.startDate}
         onChange={(event) => change({ ...settings, startDate: event.target.value })} /></label>
-      <label>Trung tâm có gửi trên 100 trung tâm tiếp cận<input type="number" required min={1} max={100} step={1} value={settings.conversion}
-        onChange={(event) => change({ ...settings, conversion: Number(event.target.value) })} /><small>Tương đương {settings.conversion}%.</small></label>
+      <label>Tỷ lệ trung tâm gửi hồ sơ dự kiến (%)<input type="number" required min={1} max={100} step={1} value={settings.conversion}
+        onChange={(event) => change({ ...settings, conversion: Number(event.target.value) })} /><small>{settings.conversion}% nghĩa là cứ tiếp cận 100 trung tâm, dự kiến {settings.conversion} trung tâm gửi hồ sơ.</small></label>
       <label>Số ngày đến lần gửi đầu tiên<input type="number" required min={1} max={90} step={1} value={settings.leadDays}
         onChange={(event) => change({ ...settings, leadDays: Number(event.target.value) })} /><small>14 ngày tương đương 2 tuần.</small></label>
       <label>Hồ sơ đạt chuẩn mỗi trung tâm mới<select value={settings.filesPerCenter}
@@ -62,9 +62,9 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
         <div><span>Ngày làm việc còn kịp mốc gửi đầu</span><strong>{result.days}</strong><span>đến {dateLabel(result.deadline)}</span></div>
         <div><span>Cần tiếp cận mỗi ngày</span><strong>{result.dailyRequired || "—"}</strong><span>Khả năng bạn nhập · {settings.dailyCapacity}/ngày</span></div>
       </div>
-      <div className="tableWrap"><table>
+      <div className="tableWrap mobileCards"><table>
         <thead><tr><th>Loại hồ sơ</th><th>Thiếu nguồn</th><th>Cần trung tâm có gửi</th><th>Cần tiếp cận trung tâm mới</th></tr></thead>
-        <tbody>{programs.map((program, index) => <tr key={program}><th>{program}</th><td>{remaining[index]}</td><td>{result.centers[index]}</td><td>{result.contacts[index]}</td></tr>)}</tbody>
+        <tbody>{programs.map((program, index) => <tr key={program}><th scope="row">{program}</th><td data-label="Hồ sơ thiếu nguồn">{remaining[index]}</td><td data-label="Cần trung tâm có gửi">{result.centers[index]}</td><td data-label="Cần tiếp cận trung tâm mới">{result.contacts[index]}</td></tr>)}</tbody>
       </table></div>
       {!result.total ? <p className="notice">Nguồn dự kiến hiện đã đủ bù phần KPI còn thiếu. Tiếp tục xác nhận và theo dõi các nguồn đã chọn.</p>
         : !result.days ? <p className="notice error" role="status">Thời gian còn lại không đủ mốc {settings.leadDays} ngày theo giả định. Cần Team Lead hỗ trợ nguồn có thể gửi sớm hoặc rà lại tiến độ của trung tâm đang chăm sóc.</p>
@@ -72,10 +72,10 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
             : <p className="notice">Khối lượng tiếp cận nằm trong khả năng bạn nhập. Kết quả vẫn phụ thuộc tỷ lệ gửi và số hồ sơ thực tế của các trung tâm.</p>}
       <p>Mỗi nhóm tiếp cận tập trung vào một loại hồ sơ để tránh cộng trùng trung tâm. Phần dự kiến từ đối tác đang có được trừ trước khi tính lượng cần tiếp cận mới.</p>
       <p>Mốc gửi đầu chỉ phản ánh thời gian đến lần gửi đầu tiên. Khi nhận hồ sơ, cần đối soát đạt chuẩn và cập nhật số thực tế để tính KPI.</p>
-      {result.weeks.length > 0 && result.total > 0 && <div className="tableWrap"><table>
-        <thead><tr><th>Tuần kết thúc</th><th>Ngày tiếp cận</th><th>Trung tâm cho D2-6</th><th>Trung tâm cho D4-1</th><th>Tổng cần tiếp cận</th></tr></thead>
-        <tbody>{result.weeks.map((week) => <tr key={week.date}><td>{dateLabel(week.date)}</td><td>{week.days}</td>
-          {week.contacts.map((count, index) => <td key={programs[index]}>{count}</td>)}<td>{week.contacts[0] + week.contacts[1]}</td></tr>)}</tbody>
+      {result.weeks.length > 0 && result.total > 0 && <div className="tableWrap mobileCards"><table>
+        <thead><tr><th>Khoảng ngày làm việc</th><th>Số ngày làm việc</th><th>Trung tâm cho D2-6</th><th>Trung tâm cho D4-1</th><th>Tổng cần tiếp cận</th></tr></thead>
+        <tbody>{result.weeks.map((week) => <tr key={week.date}><th scope="row">{dateLabel(week.from)} – {dateLabel(week.through)}</th><td data-label="Số ngày làm việc">{week.days} ngày</td>
+          {week.contacts.map((count, index) => <td data-label={"Trung tâm cho " + programs[index]} key={programs[index]}>{count}</td>)}<td data-label="Tổng trung tâm cần tiếp cận"><b>{week.contacts[0] + week.contacts[1]}</b></td></tr>)}</tbody>
       </table></div>}
     </section>
     <section className="panel policy">
