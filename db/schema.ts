@@ -1,6 +1,7 @@
 import { integer, sqliteTable, text, index, primaryKey, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
 import type { IntakeChecklist } from "../app/intake-checklist";
 import type { KpiPlan } from "../app/kpi-plan";
+import type { SupportMessage } from "../app/sales-workflow";
 
 export const members = sqliteTable("members", {
   email: text().primaryKey(),
@@ -43,6 +44,28 @@ export const records = sqliteTable("records", {
 export const demoInstalls = sqliteTable("demo_installs", {
   key: text().primaryKey(),
 });
+
+export const supportRequests = sqliteTable("support_requests", {
+  id: text().primaryKey(),
+  centerId: text("center_id").notNull().references(() => records.id),
+  requestedBy: text("requested_by").notNull().references(() => members.email),
+  assignedTo: text("assigned_to").notNull().references(() => members.email),
+  problem: text().notNull(),
+  status: text().notNull(),
+  messages: text({ mode: "json" }).$type<SupportMessage[]>().notNull(),
+  version: integer().notNull().default(1),
+  createdAt: text("created_at").notNull(),
+}, (table) => [index("support_center_idx").on(table.centerId)]);
+
+export const playbooks = sqliteTable("playbooks", {
+  team: text().notNull(),
+  key: text().notNull(),
+  draft: text().notNull(),
+  published: text(),
+  approvedAt: text("approved_at"),
+  approvedBy: text("approved_by").references(() => members.email),
+  version: integer().notNull().default(1),
+}, (table) => [primaryKey({ columns: [table.team, table.key] })]);
 
 export const accessCodes = sqliteTable("access_codes", {
   email: text().primaryKey().references(() => members.email, { onDelete: "cascade" }),

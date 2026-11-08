@@ -47,6 +47,12 @@ aside { background:#101c32; color:#d3dded; padding:26px 15px; display:flex; flex
 .weeklyTimeline small { color:#55667e }
 .weeklyNotes { white-space:pre-wrap; overflow-wrap:anywhere }
 .mobileCards th small { display:block; font-weight:400; margin-top:4px }
+.workflowSection { border-top:1px solid #dfe5ee }
+.workflowSection .planForm { margin:12px 0 }
+.workflowSection textarea { width:100%; min-width:0; font-size:16px }
+.workflowSection button { min-height:44px }
+.priorityHeading { padding:0 }
+.contactSession { margin:0 16px 14px }
 @media(max-width:740px) {
   .dailyGreeting { padding:14px; gap:10px }
   .greetingSun { width:34px; height:34px; border-radius:10px }

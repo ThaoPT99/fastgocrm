@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, lte, inArray, isNull, like, ne, not, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getClient, getDb } from "../../../db";
-import { accessCodes, demoInstalls, kpiPlans, members, records } from "../../../db/schema";
+import { accessCodes, demoInstalls, kpiPlans, members, records, playbooks, supportRequests } from "../../../db/schema";
 import { accessCodeDigest, allowAccessAttempt, getCrmIdentity, validNewPin } from "../../crm-auth";
 import { checklistItemIds, checklistOptionalIds } from "../../intake-checklist";
 import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, statuses, today } from "../../crm";
@@ -9,6 +9,7 @@ import { personalTargets, planInput, quarterOf } from "../../kpi-plan";
 import { analyzeKpiPlan } from "../../plan-analysis";
 import { contactEvidence, partnerAssistance, weeklyAssistance } from "../../crm-ai";
 import { partnerOutcomes } from "../../plan-monitor";
+import { situationKeys, supportInput } from "../../sales-workflow";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -43,6 +44,11 @@ const recordInput = z.object({
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
   (record.kind !== "logwork" || record.status !== "Cần hỗ trợ" || record.partner.length > 0));
 const command = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("support-create"), id: z.string().uuid(), centerId: z.string().uuid(),
+    assignedTo: z.string().email(), problem: z.string().trim().min(1).max(2000) }),
+  z.object({ action: z.literal("support-reply"), ...supportInput.shape }),
+  z.object({ action: z.literal("playbook"), team: z.string().max(60), key: z.enum(situationKeys),
+    version: z.number().int().min(0), operation: z.enum(["draft", "publish"]), content: z.string().trim().min(1).max(4000) }),
   z.object({
     action: z.literal("partner-ai"), centerId: z.string().uuid(),
     mode: z.enum(["summary", "prepare", "message", "log"]),
@@ -111,7 +117,7 @@ async function context(request: Request) {
   const role = salesMode ? "sale" : admin ? "head" : actor!.role;
   const visible = roster.filter((member) => role === "head" || role === "intake" ||
     (role === "lead" ? member.team === actor!.team : member.email === email));
-  return { db, email, admin, ownerAdmin, salesMode, role, visible, viaCode: identity.viaCode, name: identity.displayName };
+  return { db, email, admin, ownerAdmin, salesMode, role, visible, roster, actor, viaCode: identity.viaCode, name: identity.displayName };
 }
 
 export async function GET(request: Request) {
@@ -136,8 +142,21 @@ export async function GET(request: Request) {
     ? { ...row, performedBy: "" } : row);
   const plans = ctx.role !== "intake" && visibleEmails.size
     ? await ctx.db.select().from(kpiPlans).where(inArray(kpiPlans.owner, [...visibleEmails])) : [];
+  const centerIds = rows.filter((row) => row.kind === "partner").map((row) => row.id);
+  const support = ctx.role !== "intake" && centerIds.length
+    ? await ctx.db.select().from(supportRequests).where(inArray(supportRequests.centerId, centerIds)) : [];
+  const teams = new Set(ctx.visible.map((person) => person.team));
+  const supportContacts = ctx.role === "intake" ? [] : ctx.roster.filter((person) =>
+    person.role === "head" || (person.role === "lead" && teams.has(person.team)));
+  const guides = ctx.role === "intake" ? [] : await ctx.db.select().from(playbooks)
+    .where(ctx.role === "head" ? undefined : inArray(playbooks.team, ["", ...teams]));
+  const guideData = guides.flatMap((guide) => {
+    const editor = ctx.role === "head" || (ctx.role === "lead" && guide.team === ctx.actor?.team);
+    if (!editor && !guide.published) return [];
+    return [{ ...guide, draft: editor ? guide.draft : undefined, approvedBy: undefined }];
+  });
   return json({ members: roster, records: scopedRows, role: ctx.role, admin: ctx.admin, ownerAdmin: ctx.ownerAdmin, salesMode: ctx.salesMode,
-    email: ctx.email, demoCleared, partnersLinked, followupsReady, codeEmails, intakeCenters, plans });
+    email: ctx.email, demoCleared, partnersLinked, followupsReady, codeEmails, intakeCenters, plans, support, supportContacts, guides: guideData });
 }
 
 async function clearDemo(db: ReturnType<typeof getDb>) {
@@ -179,6 +198,50 @@ export async function POST(request: Request) {
 
   const ctx = await context(request);
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
+  if (data.action === "playbook") {
+    if (!(ctx.role === "head" || (ctx.role === "lead" && data.team === ctx.actor?.team))) return json({ error: "Bạn chỉ được duyệt hướng dẫn trong phạm vi quản lý." }, 403);
+    if (!ctx.roster.some((person) => person.email === ctx.email)) return json({ error: "Thêm hồ sơ nhân sự của bạn trước khi duyệt hướng dẫn." }, 400);
+    const condition = and(eq(playbooks.team, data.team), eq(playbooks.key, data.key), eq(playbooks.version, data.version));
+    if (data.operation === "publish") {
+      const guide = await ctx.db.select().from(playbooks).where(condition).get();
+      if (!guide || guide.draft !== data.content) return json({ error: "Lưu bản nháp mới nhất trước khi duyệt." }, 409);
+      const updated = await ctx.db.update(playbooks).set({ published: guide.draft, approvedBy: ctx.email,
+        approvedAt: new Date().toISOString(), version: data.version + 1 }).where(condition).returning();
+      return updated.length ? json({ ok: true }) : json({ error: "Hướng dẫn vừa thay đổi. Hãy tải lại." }, 409);
+    }
+    const saved = data.version === 0
+      ? await ctx.db.insert(playbooks).values({ team: data.team, key: data.key, draft: data.content }).onConflictDoNothing().returning()
+      : await ctx.db.update(playbooks).set({ draft: data.content, version: data.version + 1 }).where(condition).returning();
+    return saved.length ? json({ ok: true }) : json({ error: "Hướng dẫn vừa thay đổi. Hãy tải lại." }, 409);
+  }
+  if (data.action === "support-create" || data.action === "support-reply") {
+    if (ctx.role === "intake") return json({ error: "Vai trò hồ sơ chưa có quyền dùng hỗ trợ kinh doanh." }, 403);
+    const request = data.action === "support-reply"
+      ? await ctx.db.select().from(supportRequests).where(eq(supportRequests.id, data.id)).get() : undefined;
+    const centerId = data.action === "support-create" ? data.centerId : request?.centerId;
+    const center = centerId ? await ctx.db.select().from(records).where(and(eq(records.id, centerId), eq(records.kind, "partner"))).get() : undefined;
+    if (!center || !ctx.visible.some((person) => person.email === center.owner)) return json({ error: "Bạn không có quyền hỗ trợ trung tâm này." }, 403);
+    if (!ctx.roster.some((person) => person.email === ctx.email)) return json({ error: "Thêm hồ sơ nhân sự của bạn trước khi gửi hỗ trợ." }, 400);
+    if (data.action === "support-create") {
+      const ownerTeam = ctx.roster.find((person) => person.email === center.owner)?.team;
+      const assignee = ctx.roster.find((person) => person.email === data.assignedTo &&
+        (person.role === "head" || (person.role === "lead" && person.team === ownerTeam)));
+      if (!assignee) return json({ error: "Chọn Trưởng nhóm của người phụ trách hoặc Trưởng khối." }, 400);
+      const inserted = await ctx.db.insert(supportRequests).values({ id: data.id, centerId: center.id, requestedBy: ctx.email,
+        assignedTo: assignee.email, problem: data.problem, status: "Mới", messages: [], createdAt: new Date().toISOString() }).onConflictDoNothing().returning();
+      if (inserted.length) return json({ ok: true });
+      const existing = await ctx.db.select().from(supportRequests).where(eq(supportRequests.id, data.id)).get();
+      return existing?.requestedBy === ctx.email && existing.centerId === center.id && existing.problem === data.problem && existing.assignedTo === assignee.email
+        ? json({ ok: true }) : json({ error: "Yêu cầu đã thay đổi. Hãy tải lại." }, 409);
+    }
+    if (!request) return json({ error: "Không tìm thấy yêu cầu." }, 404);
+    const manager = ctx.role === "head" || (ctx.role === "lead" && ctx.actor?.team === ctx.roster.find((person) => person.email === center.owner)?.team);
+    if (data.status && !manager) return json({ error: "Trưởng nhóm hoặc Trưởng khối cập nhật trạng thái xử lý." }, 403);
+    const updated = await ctx.db.update(supportRequests).set({ status: data.status ?? request.status,
+      messages: [...request.messages, { by: ctx.email, text: data.note, at: new Date().toISOString() }], version: data.version + 1 })
+      .where(and(eq(supportRequests.id, data.id), eq(supportRequests.version, data.version))).returning();
+    return updated.length ? json({ ok: true }) : json({ error: "Yêu cầu vừa thay đổi. Hãy tải lại trước khi gửi." }, 409);
+  }
   if (data.action === "partner-ai" || data.action === "weekly-ai") {
     if (ctx.role === "intake") return json({ error: "Vai trò hồ sơ chưa có quyền dùng trợ lý kinh doanh." }, 403);
     const permitted = ctx.visible.map((person) => person.email);
@@ -399,6 +462,8 @@ export async function POST(request: Request) {
 
   if (data.action === "remove") {
     if (!permitted.length) return json({ error: "Bạn chưa có dữ liệu được cấp quyền." }, 403);
+    const support = await ctx.db.select({ id: supportRequests.id }).from(supportRequests).where(eq(supportRequests.centerId, data.id)).get();
+    if (support) return json({ error: "Trung tâm có lịch sử yêu cầu hỗ trợ, cần giữ để đối soát." }, 409);
     const linked = await ctx.db.select({ id: records.id }).from(records)
       .where(and(eq(records.partnerId, data.id), inArray(records.owner, permitted))).get();
     if (linked) return json({ error: "Trung tâm đang có hoạt động hoặc hồ sơ liên kết. Hãy chuyển các bản ghi đó trước khi xóa." }, 409);

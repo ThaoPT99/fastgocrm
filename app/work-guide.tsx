@@ -5,7 +5,7 @@ type Step = { title: string; description: string; label: string; to: GuideDestin
 
 const partnerStep: Step = {
   title: "Ghi kết quả tại trung tâm",
-  description: "Mở Đối tác B2B, chọn trung tâm và bấm Cập nhật đối tác. Ghi việc đã làm, kết quả và ngày cần liên hệ tiếp. Với trung tâm mới, thêm trung tâm trước khi ghi liên hệ.",
+  description: "Mở Đối tác B2B, chọn trung tâm và ghi kết quả, ngày cần liên hệ tiếp. Có hướng dẫn theo tình huống và biểu mẫu gửi hỗ trợ cho quản lý ngay trong hồ sơ trung tâm. Với trung tâm mới, thêm trung tâm trước khi ghi liên hệ.",
   label: "Mở đối tác B2B",
   to: "partner",
 };
@@ -33,7 +33,7 @@ const guides: Record<Role, { intro: string; steps: Step[] }> = {
     intro: "Mỗi trung tâm có một hồ sơ làm việc chung cho lịch sử liên hệ, lịch hẹn và hồ sơ học sinh.",
     steps: [{
       title: "Bắt đầu ngày ở Việc hôm nay",
-      description: "Xử lý đối tác quá hạn trước, sau đó xem lịch hẹn đang mở và hồ sơ thiếu giấy tờ. Bấm vào từng mục để mở bản ghi cần xử lý.",
+      description: "Xem Liên hệ ưu tiên hôm nay và bấm Bắt đầu lượt liên hệ. Sau khi trao đổi, ghi kết quả rồi dùng Lưu và sang trung tâm tiếp theo. Danh sách cũng nêu lịch hẹn và hồ sơ cần bổ sung để bạn xử lý.",
       label: "Mở Việc hôm nay", to: "workday",
     }, partnerStep, logStep, planStep],
   },
