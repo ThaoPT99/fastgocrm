@@ -12,6 +12,17 @@ aside { background:#101c32; color:#d3dded; padding:26px 15px; display:flex; flex
 .brand b { display:grid; place-items:center; background:#426bf0; width:40px; height:40px; border-radius:12px; color:#fff }
 .brand strong { color:#a5bbff }
 .mobileMenu { display:none }
+.dailyGreeting { display:flex; align-items:flex-start; gap:14px; padding:18px 20px; margin-bottom:16px; border:1px solid #eddbc0; border-radius:14px; background:linear-gradient(110deg,#fff5e3,#fffdf8); color:#64451b }
+.dailyGreeting > div { min-width:0; overflow-wrap:anywhere }
+.greetingSun { display:grid; place-items:center; width:44px; height:44px; flex:none; border-radius:14px; background:#ffe8b5; color:#886019 }
+.dailyGreeting time { display:block; font-size:12px; color:#725a37; margin-bottom:5px }
+.dailyGreeting h2 { margin:0 0 5px; font-size:20px; line-height:1.35 }
+.dailyGreeting p { margin:0; color:#644f30; font-size:14px; line-height:1.6 }
+@media(max-width:740px) {
+  .dailyGreeting { padding:14px; gap:10px }
+  .greetingSun { width:34px; height:34px; border-radius:10px }
+  .dailyGreeting h2 { font-size:18px }
+}
 .brand small,.navLabel { display:block; letter-spacing:.1em; font-size:9px; color:#9eafc9; font-weight:750 }
 .navLabel { padding:0 10px }
 nav { display:grid; gap:5px }

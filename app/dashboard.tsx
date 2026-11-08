@@ -10,6 +10,7 @@ import IntakeChecklistFields from "./intake-checklist-fields";
 import SalesQueue from "./sales-queue";
 import WorkGuide from "./work-guide";
 import TodayPlan from "./today-plan";
+import DailyGreeting from "./daily-greeting";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
@@ -353,6 +354,8 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         </div>
         {error && <div className="notice error" role="alert">{error}</div>}
         {message && <div className="notice" role="status">{message}</div>}
+        {data && (view === "workday" || view === "overview" || (intakeOnly && view === "intake")) &&
+          <DailyGreeting name={roster.find((member) => member.email === data.email)?.name ?? name} day={day} />}
         {changingPin && <section className="panel"><form className="form" onSubmit={(event) => {
           event.preventDefault();
           void save({ action: "change-passcode", currentCode, newCode: pinValue }, "", true);
