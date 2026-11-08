@@ -7,7 +7,7 @@ import type { FollowupUpdate } from "./partner-followup";
 
 export type AssistantRequest =
   | { action: "partner-ai"; centerId: string; mode: PartnerAiMode; note: string; channel: FollowupUpdate["channel"] }
-  | { action: "weekly-ai"; teamReview: boolean; team?: string; from: string; to: string };
+  | { action: "weekly-ai"; teamReview: boolean; team?: string; owner?: string; from: string; to: string };
 export type AskAssistant = (request: AssistantRequest) => Promise<CrmAiOutput>;
 
 function AssistantResult({ result }: { result: CrmAiOutput }) {
@@ -70,11 +70,12 @@ export function PartnerAssistant({ centerId, ask, apply, disabled }: {
   </section>;
 }
 
-export function WeeklyAssistant({ day, team, canReviewTeam, ask }: {
+export function WeeklyAssistant({ day, team, canReviewTeam, ask, range, owner, personLabel }: {
   day: string; team: string; canReviewTeam: boolean; ask: AskAssistant;
+  range?: { from: string; to: string }; owner?: string; personLabel?: string;
 }) {
-  const [from, setFrom] = useState(currentWeek(day));
-  const [to, setTo] = useState(day);
+  const [from, setFrom] = useState(range?.from ?? currentWeek(day));
+  const [to, setTo] = useState(range?.to ?? day);
   const [result, setResult] = useState<CrmAiOutput>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -84,19 +85,21 @@ export function WeeklyAssistant({ day, team, canReviewTeam, ask }: {
       setError("Chọn khoảng thời gian hợp lệ, tối đa 31 ngày."); return;
     }
     setBusy(true); setError(""); setResult(undefined);
-    try { setResult(await ask({ action: "weekly-ai", teamReview, team: teamReview ? team : undefined, from, to })); }
+    try { setResult(await ask({ action: "weekly-ai", teamReview, team: teamReview ? team : undefined, owner: teamReview ? undefined : owner, from, to })); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Chưa nhận được kết quả từ AI."); }
     finally { setBusy(false); }
   }
   return <section className="panel policy planAi">
     <h2>Trợ lý rà công việc và chuẩn bị họp</h2>
     <p>Gửi số liệu hoạt động, các ghi chú gần nhất và tiến độ KPI trong phạm vi của bạn tới AI khi bấm phân tích. Dữ liệu chi tiết được rút gọn; có thể đối chiếu đầy đủ ở nhật ký.</p>
-    <div className="planForm"><div className="formGrid">
+    {!range && <div className="planForm"><div className="formGrid">
       <label>Từ ngày<input type="date" required disabled={busy} max={to || day} value={from} onChange={(event) => { setFrom(event.target.value); setResult(undefined); }} /></label>
       <label>Đến ngày<input type="date" required disabled={busy} min={from} max={day} value={to} onChange={(event) => { setTo(event.target.value); setResult(undefined); }} /></label>
-    </div></div>
+    </div></div>}
     <div className="rowActions">
-      <button type="button" disabled={busy} onClick={() => void run(false)}>AI rà tuần của tôi</button>
+      {(!canReviewTeam || owner) && <button type="button" disabled={busy} onClick={() => void run(false)}>
+        {personLabel ? "AI nhận xét tuần của " + personLabel : "AI rà tuần của tôi"}
+      </button>}
       {canReviewTeam && <button type="button" disabled={busy} onClick={() => void run(true)}>AI chuẩn bị họp {team || "toàn đội"}</button>}
     </div>
     {busy && <p role="status">AI đang tổng hợp…</p>}

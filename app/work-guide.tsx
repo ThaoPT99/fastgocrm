@@ -17,7 +17,7 @@ const planStep: Step = {
 };
 const logStep: Step = {
   title: "Xem hoạt động theo ngày",
-  description: "Hoạt động đối tác tự vào nhật ký của người thực hiện. Dùng Ghi hoạt động khi cần ghi việc nội bộ hoặc nêu vướng mắc cần hỗ trợ.",
+  description: "Hoạt động đối tác tự vào nhật ký của người thực hiện. Dùng Ghi hoạt động cho việc nội bộ hoặc vướng mắc cần hỗ trợ. Chọn Tổng hợp tuần để xem số liệu, nội dung đã ghi và dùng AI nhận xét theo tuần.",
   label: "Mở nhật ký làm việc",
   to: "logwork",
 };

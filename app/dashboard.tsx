@@ -12,7 +12,8 @@ import WorkGuide from "./work-guide";
 import TodayPlan from "./today-plan";
 import DailyGreeting from "./daily-greeting";
 import type { PlanAnalysis } from "./plan-analysis";
-import { PartnerAssistant, WeeklyAssistant, type AskAssistant } from "./crm-assistant";
+import { PartnerAssistant, type AskAssistant } from "./crm-assistant";
+import WeeklyWorkPanel from "./weekly-work-panel";
 import type { FollowupUpdate } from "./partner-followup";
 import PlanWatch from "./plan-watch";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
@@ -35,7 +36,7 @@ const descriptions: Record<View, string> = {
   partner: "Lưu đầu mối, ghi kết quả liên hệ và đặt bước tiếp theo tại từng trung tâm.",
   meeting: "Theo dõi các buổi gặp đã lên lịch với trung tâm và cập nhật trạng thái sau buổi gặp.",
   intake: "Theo dõi hồ sơ theo trung tâm và nhập số giấy tờ thực nhận trong checklist.",
-  logwork: "Xem hoạt động đã làm theo ngày và ghi thêm việc nội bộ khi cần.",
+  logwork: "Xem hoạt động theo ngày, tổng hợp công việc theo tuần và ghi việc nội bộ khi cần.",
   plan: "Tính mốc hồ sơ đạt chuẩn theo tuần, kiểm tra nguồn dự kiến và chọn đối tác cần ưu tiên.",
   overview: "Theo dõi hoạt động và kết quả trong phạm vi bạn phụ trách.",
   kpi: "Tra cứu chỉ tiêu hồ sơ và quy chế thưởng theo từng vai trò.",
@@ -78,6 +79,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const [followupDraft, setFollowupDraft] = useState<{ value: FollowupUpdate; revision: number }>();
   const [followupFilter, setFollowupFilter] = useState<FollowupFilter>("all");
   const [logDate, setLogDate] = useState(today);
+  const [logMode, setLogMode] = useState<"day" | "week">("day");
   const [logTeam, setLogTeam] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -477,9 +479,14 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               })} />
           </div>
         </>}
-        {data && view === "logwork" && !readOnly && <WeeklyAssistant key={viewRole + logTeam} day={day} team={logTeam}
-          canReviewTeam={viewRole === "head" || viewRole === "lead"} ask={askAssistant} />}
-        {data && view === "logwork" && <section className="panel">
+        {data && view === "logwork" && <div className="followupFilters" aria-label="Chế độ xem nhật ký">
+          <button aria-pressed={logMode === "day"} onClick={() => { setLogMode("day"); setDraft(undefined); }}>Theo ngày</button>
+          <button aria-pressed={logMode === "week"} onClick={() => { setLogMode("week"); setDraft(undefined); }}>Tổng hợp tuần</button>
+        </div>}
+        {data && view === "logwork" && logMode === "week" && <WeeklyWorkPanel key={viewRole + previewScope}
+          day={day} members={visible} records={rows} team={logTeam} setTeam={setLogTeam} readOnly={readOnly}
+          canReviewTeam={viewRole === "head" || viewRole === "lead"} ask={askAssistant} openCenter={(id) => openCenter(id)} />}
+        {data && view === "logwork" && logMode === "day" && <section className="panel">
           <div className="sectionHead">
             <div><h2>Hoạt động theo ngày</h2><p>Cập nhật đối tác tự vào nhật ký của người thao tác. Mỗi người có thể ghi thêm từng hoạt động nội bộ trong ngày.</p></div>
             <div className="logFilters">
