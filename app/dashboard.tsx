@@ -11,6 +11,7 @@ import SalesQueue from "./sales-queue";
 import WorkGuide from "./work-guide";
 import TodayPlan from "./today-plan";
 import DailyGreeting from "./daily-greeting";
+import type { PlanAnalysis } from "./plan-analysis";
 import { checklistProgress, type IntakeChecklist } from "./intake-checklist";
 
 type Member = { email: string; name: string; team: string; role: Role };
@@ -141,6 +142,16 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     } finally {
       setBusy(false);
     }
+  }
+
+  async function analyzePlan(plan: KpiPlan, owner: string): Promise<PlanAnalysis> {
+    const response = await fetch("/api/crm", {
+      method: "POST", headers: crmHeaders(true), signal: AbortSignal.timeout(50_000),
+      body: JSON.stringify({ action: "analyze-plan", plan, owner }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Chưa phân tích được kế hoạch. Bạn thử lại sau.");
+    return result.analysis;
   }
 
   function closePinForm() {
@@ -401,7 +412,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         {data && view === "plan" && <KpiPlanner key={viewRole + previewScope} day={day} members={visible} centers={centers} records={rows}
           plans={data.plans ?? []} email={data.email}
           readOnly={readOnly} busy={busy} save={(plan) => void save({ action: "kpi-plan", plan }, "Đã lưu kế hoạch KPI.")}
-          open={openCenter} goPartners={() => changeView("partner")} />}
+          open={openCenter} goPartners={() => changeView("partner")} analyze={analyzePlan} />}
         {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "workday" && <>
           <TodayPlan day={day} plan={data.plans?.find((plan) => plan.owner === (previewRole ? previewScope : data.email) && plan.quarter === quarterOf(day))}

@@ -6,8 +6,10 @@ import { accessCodeDigest, allowAccessAttempt, getCrmIdentity, validNewPin } fro
 import { checklistItemIds, checklistOptionalIds } from "../../intake-checklist";
 import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, statuses, today } from "../../crm";
 import { planInput } from "../../kpi-plan";
+import { analyzeKpiPlan } from "../../plan-analysis";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 const json = (data: unknown, status = 200) => Response.json(data, {
   status, headers: { "Cache-Control": "no-store" },
 });
@@ -39,6 +41,7 @@ const recordInput = z.object({
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
   (record.kind !== "logwork" || record.status !== "Cần hỗ trợ" || record.partner.length > 0));
 const command = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("analyze-plan"), owner: z.string().email(), plan: planInput }),
   z.object({ action: z.literal("kpi-plan"), plan: planInput }),
   z.object({ action: z.literal("start-sales-mode") }),
   z.object({ action: z.literal("passcode"), email: z.string().trim().toLowerCase().email(), operation: z.enum(["assign", "revoke"]), code: z.string().max(16).optional() }),
@@ -165,6 +168,20 @@ export async function POST(request: Request) {
 
   const ctx = await context(request);
   if (!ctx) return json({ error: "Tài khoản chưa được cấp quyền CRM." }, 403);
+  if (data.action === "analyze-plan") {
+    const member = ctx.visible.find((person) => person.email === data.owner);
+    if (ctx.role === "intake" || !member || member.role === "intake") return json({ error: "Bạn không có quyền phân tích kế hoạch này." }, 403);
+    const ids = [...new Set(data.plan.sources.map((source) => source.centerId))];
+    if (ids.length) {
+      const centers = await ctx.db.select({ id: records.id }).from(records)
+        .where(and(eq(records.kind, "partner"), eq(records.owner, data.owner), inArray(records.id, ids)));
+      if (centers.length !== ids.length) return json({ error: "Nguồn dự kiến không thuộc nhân sự đã chọn. Hãy tải lại dữ liệu." }, 400);
+    }
+    if (!process.env.DEEPSEEK_API_KEY?.trim()) return json({ error: "Chưa cấu hình DeepSeek cho hệ thống." }, 503);
+    if (!await allowAccessAttempt("plan-ai:" + ctx.email, 5)) return json({ error: "Bạn đã dùng 5 lượt phân tích trong 10 phút. Hãy thử lại sau." }, 429);
+    const result = await analyzeKpiPlan(data.plan, ctx.salesMode ? "sale" : member.role, today());
+    return json(result, result.status);
+  }
   if (data.action === "kpi-plan") {
     if (ctx.role === "intake" || !ctx.visible.some((person) => person.email === ctx.email)) {
       return json({ error: "Bạn không có quyền lưu kế hoạch KPI." }, 403);

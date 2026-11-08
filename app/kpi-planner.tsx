@@ -4,6 +4,8 @@ import { useState } from "react";
 import { defaultOutreach, planInput, programs, personalTargets, quarterOf, quarterRange, weeklyMilestones, type KpiPlan } from "./kpi-plan";
 import { roles, type Role } from "./crm";
 import PlanOutreach, { OutreachInputs, type PlanningRecord } from "./plan-outreach";
+import PlanAnalysisCard from "./plan-analysis-card";
+import type { PlanAnalysis } from "./plan-analysis";
 
 type Person = { email: string; name: string; role: Role; team: string };
 type Center = { id?: string; owner: string; title: string; followupDate?: string | null };
@@ -13,9 +15,10 @@ const zero = (): Counts => [0, 0];
 const displayDate = (date: string) => date.split("-").reverse().join("/");
 const yearQuarterLabel = (quarter: string) => "Quý " + quarter.slice(-1) + "/" + quarter.slice(0, 4);
 
-export default function KpiPlanner({ day, members, centers, records, plans, email, readOnly, busy, save, open, goPartners }: {
+export default function KpiPlanner({ day, members, centers, records, plans, email, readOnly, busy, save, open, goPartners, analyze }: {
   day: string; members: Person[]; centers: Center[]; plans: SavedPlan[]; email: string;
   records: PlanningRecord[]; goPartners: () => void;
+  analyze: (plan: KpiPlan, owner: string) => Promise<PlanAnalysis>;
   readOnly: boolean; busy: boolean; save: (plan: KpiPlan) => void; open: (id: string, update: boolean) => void;
 }) {
   const current = quarterOf(day);
@@ -56,13 +59,15 @@ export default function KpiPlanner({ day, members, centers, records, plans, emai
     </section>}
     <QuarterPlan key={member.email + activeQuarter + (saved?.version ?? 0)} day={day} quarter={activeQuarter}
       role={member.role} centers={centers.filter((center) => center.owner === member.email && center.id)}
-      records={records} goPartners={goPartners} saved={saved} editable={!readOnly && email === member.email} busy={busy} save={save} open={open} />
+      records={records} goPartners={goPartners} saved={saved} editable={!readOnly && email === member.email} busy={busy} save={save} open={open}
+      analyze={readOnly ? undefined : (plan) => analyze(plan, member.email)} />
   </>;
 }
 
-function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, editable, busy, save, open }: {
+function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, editable, busy, save, open, analyze }: {
   day: string; quarter: string; role: Exclude<Role, "intake">; centers: Center[];
   records: PlanningRecord[]; goPartners: () => void;
+  analyze?: (plan: KpiPlan) => Promise<PlanAnalysis>;
   saved?: SavedPlan; editable: boolean; busy: boolean; save: (plan: KpiPlan) => void; open: (id: string, update: boolean) => void;
 }) {
   const { start, end } = quarterRange(quarter);
@@ -156,6 +161,7 @@ function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, 
     </section>
     <PlanOutreach plan={plan} day={day} remaining={remaining} centers={centers} records={records} editable={editable}
       change={(settings) => setPlan({ ...plan, settings })} open={(id) => open(id, editable)} goPartners={goPartners} dirty={dirty} />
+    {analyze && <PlanAnalysisCard key={JSON.stringify(plan)} plan={plan} analyze={analyze} unsaved={dirty} />}
     {day <= end && gap.some(Boolean) && <section className="panel policy">
       <h2>Việc ưu tiên đề xuất</h2>
       {remaining.some(Boolean) && <p><b>Bổ sung nguồn:</b> {programs.map((program, index) => remaining[index] ? remaining[index] + " " + program : "").filter(Boolean).join(" và ")}. Đây là phần còn thiếu kể cả khi các nguồn đang dự kiến đều thành hiện thực.</p>}

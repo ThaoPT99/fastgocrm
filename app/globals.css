@@ -18,6 +18,12 @@ aside { background:#101c32; color:#d3dded; padding:26px 15px; display:flex; flex
 .dailyGreeting time { display:block; font-size:12px; color:#725a37; margin-bottom:5px }
 .dailyGreeting h2 { margin:0 0 5px; font-size:20px; line-height:1.35 }
 .dailyGreeting p { margin:0; color:#644f30; font-size:14px; line-height:1.6 }
+.planAi { border-color:#c8d4f4; background:#f9fbff }
+.planAi .sectionHead { padding:0; align-items:flex-start }
+.planAi .sectionHead button { min-height:44px }
+.aiResult { padding-top:10px; margin-top:12px; border-top:1px solid #dfe5ee; overflow-wrap:anywhere; line-height:1.65 }
+.aiResult ol { padding-left:22px; display:grid; gap:12px }
+.aiResult small { color:#55667e }
 @media(max-width:740px) {
   .dailyGreeting { padding:14px; gap:10px }
   .greetingSun { width:34px; height:34px; border-radius:10px }
