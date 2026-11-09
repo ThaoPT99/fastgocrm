@@ -52,6 +52,8 @@ aside { background:#101c32; color:#d3dded; padding:26px 15px; display:flex; flex
 .workflowSection textarea { width:100%; min-width:0; font-size:16px }
 .workflowSection button { min-height:44px }
 .priorityHeading { padding:0 }
+.compactDetails > summary { min-height:44px; padding:10px 0; font-weight:650; line-height:1.5 }
+.compactDetails > .panel { margin:8px 0 0 }
 .nextStepGrid { display:grid; grid-column:1/-1; grid-template-columns:repeat(auto-fit,minmax(min(100%,210px),1fr)); gap:12px; padding:0; margin:0; min-width:0; border:0 }
 .nextStepGrid .wideField { grid-column:1/-1 }
 @media(max-width:740px) { .nextStepGrid { grid-template-columns:minmax(0,1fr) } }

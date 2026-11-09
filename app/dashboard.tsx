@@ -395,7 +395,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         </div>
         {error && <div className="notice error" role="alert">{error}</div>}
         {message && <div className="notice" role="status">{message}</div>}
-        {data && (view === "workday" || view === "overview" || (intakeOnly && view === "intake")) &&
+        {data && (view === "overview" || (intakeOnly && view === "intake")) &&
           <DailyGreeting name={roster.find((member) => member.email === data.email)?.name ?? name} day={day} />}
         {changingPin && <section className="panel"><form className="form" onSubmit={(event) => {
           event.preventDefault();
@@ -433,14 +433,13 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           {previewRole && <span>{!previewScope && (previewRole === "lead" || previewRole === "sale") ? "Thêm nhân sự hoặc nhóm thật để xem dữ liệu trong phạm vi này." : "Đang xem thử · Chỉ xem"}</span>}
         </section>}
         {view === "guide" && viewRole && <WorkGuide role={viewRole} go={changeView} />}
-        {data && (view === "workday" || view === "overview" || (intakeOnly && view === "intake")) && <section className="toolbar startHere">
+        {data && (view === "overview" || (intakeOnly && view === "intake")) && <section className="toolbar startHere">
           <div><b>Mới sử dụng CRM?</b> <span>{intakeOnly ? "Xem cách tạo hồ sơ và ghi số giấy tờ đã nhận."
-            : view === "workday" ? "Xem cách ghi liên hệ, đặt follow-up và lập kế hoạch quý."
-              : "Xem quy trình theo vai trò và cách rà kế hoạch của nhân sự."}</span></div>
+            : "Xem quy trình theo vai trò và cách rà kế hoạch của nhân sự."}</span></div>
           <button onClick={() => changeView("guide")}>Xem hướng dẫn</button>
         </section>}
-        {data && (view === "workday" || view === "overview") && !intakeOnly && <PlanWatch day={day} members={visible}
-          centers={centers} records={rows} plans={data.plans ?? []} personal={view === "workday"}
+        {data && view === "overview" && !intakeOnly && <PlanWatch day={day} members={visible}
+          centers={centers} records={rows} plans={data.plans ?? []} personal={false}
           openPlan={(owner) => { setPlanningOwner(owner); changeView("plan"); }}
           openCenter={(id) => openCenter(id)} />}
         {data && view === "plan" && <KpiPlanner key={viewRole + previewScope + planningOwner} initialOwner={planningOwner} day={day} members={visible} centers={centers} records={rows}
@@ -449,20 +448,26 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           open={openCenter} goPartners={() => changeView("partner")} analyze={analyzePlan} />}
         {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "workday" && <>
-          <WorkNextSteps day={day} centers={centers} open={(id) => openCenter(id)} />
-          <ContactPriorities day={day} centers={centers} records={rows}
+          {centers.length > 0 && <WorkNextSteps day={day} centers={centers} open={(id) => openCenter(id)} />}
+          {centers.length > 0 && <ContactPriorities day={day} centers={centers} records={rows}
             plan={data.plans?.find((plan) => plan.owner === (previewRole ? previewScope : data.email) && plan.quarter === quarterOf(day))}
-            open={(id) => openCenter(id)} />
+            open={(id) => openCenter(id)} />}
+          <details className="panel policy compactDetails"><summary>Tiến độ kế hoạch</summary>
+          <PlanWatch day={day} members={visible} centers={centers} records={rows} plans={data.plans ?? []} personal
+            openPlan={(owner) => { setPlanningOwner(owner); changeView("plan"); }} openCenter={(id) => openCenter(id)} />
           <TodayPlan day={day} plan={data.plans?.find((plan) => plan.owner === (previewRole ? previewScope : data.email) && plan.quarter === quarterOf(day))}
             centers={centers} records={rows} goPlan={() => changeView("plan")} goPartners={() => changeView("partner")} />
+          </details>
           <div className="toolbar">
             <b>{day.split("-").reverse().join("/")}</b>
             <div className="rowActions">
               <button onClick={() => changeView("plan")}>Kế hoạch KPI quý</button>
               <button onClick={() => changeView("logwork")}>Nhật ký làm việc</button>
-              {!readOnly && <button className="primary" onClick={() => { changeView("partner"); startEntry("partner", data.email); }}>+ Thêm trung tâm</button>}
+              {!readOnly && <button className="primary" onClick={() => { changeView("partner"); startEntry("partner", data.email); }}>{centers.length ? "+ Thêm trung tâm" : "Thêm trung tâm đầu tiên"}</button>}
             </div>
           </div>
+          <DailyGreeting name={roster.find((member) => member.email === data.email)?.name ?? name} day={day} />
+          <details className="panel policy compactDetails"><summary>Lịch hẹn và hồ sơ cần bổ sung</summary>
           <div className="salesQueues">
             <SalesQueue title="Lịch hẹn cần xử lý" empty="Không có lịch hẹn đang mở đến hôm nay." items={rows
               .filter((entry) => entry.kind === "meeting" && entry.status === "Đã lên lịch" && entry.date <= day)
@@ -478,6 +483,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
                 badge: "Thiếu " + (total - completed) + " mục", urgent: true, open: () => openFromWorkday(entry) }];
             })} />
           </div>
+          </details>
         </>}
         {data && (view === "workday" || view === "overview") && (data.support ?? []).some((request) => request.status !== "Đã giải quyết" && centersById.has(request.centerId)) &&
           <section className="panel policy"><h2>Yêu cầu hỗ trợ đang mở</h2>
@@ -598,22 +604,31 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             {selectedCenter.followupDate ? <span>{selectedCenter.followupAction} · <span className={followupGroup(selectedCenter.followupDate, day) === "late" ? "pill danger" : "pill"}>{selectedCenter.followupDate}</span></span>
               : <span>Chưa đặt lịch</span>}
           </div>
+          {latestContact.get(selectedCenter.id!) && <div className="sectionHead">
+            <div><b>Lần trao đổi gần nhất</b><p>{activityWhen(latestContact.get(selectedCenter.id!)!)} · {latestContact.get(selectedCenter.id!)!.title}</p>
+              {latestContact.get(selectedCenter.id!)!.notes && <div className="notes">{latestContact.get(selectedCenter.id!)!.notes}</div>}</div>
+          </div>}
           {!readOnly && <NextStepEditor key={selectedCenter.id + ":step:" + selectedCenter.version} center={selectedCenter} save={save} disabled={busy || updatingCenter} />}
-          {!readOnly && <PartnerAssistant key={selectedCenter.id + ":" + selectedCenter.version} centerId={selectedCenter.id!} ask={askAssistant} disabled={busy} apply={(value) => {
+          {!readOnly && <details className="policy compactDetails workflowSection"><summary>Trợ lý AI</summary><PartnerAssistant key={selectedCenter.id + ":" + selectedCenter.version} centerId={selectedCenter.id!} ask={askAssistant} disabled={busy} apply={(value) => {
             if (updatingCenter && !window.confirm("Bạn đang mở biểu mẫu cập nhật. Thay nội dung bằng bản nháp AI?")) return;
             setDraft(undefined);
             setFollowupDraft((previous) => ({ value, revision: (previous?.revision ?? 0) + 1 }));
             setUpdatingCenter(true);
-          }} />}
-          <SituationGuide key={selectedCenter.id + ":guide"} team={people.get(selectedCenter.owner)?.team ?? ""} guides={data.guides ?? []}
-            manager={viewRole === "head" || viewRole === "lead"} readOnly={readOnly} save={save} busy={busy} />
+          }} /></details>}
           {updatingCenter && <PartnerFollowup key={selectedCenter.id + ":" + (followupDraft?.revision ?? 0)} initial={followupDraft?.value} nextAction={selectedCenter.followupAction} nextDate={selectedCenter.followupDate}
             nextOwner={selectedCenter.nextOwner} nextParty={selectedCenter.nextParty} busy={busy}
             onCancel={() => setUpdatingCenter(false)}
             onSave={(update) => void save({ action: "followup", centerId: selectedCenter.id, version: selectedCenter.version, ...update }, "Đã lưu kết quả và bước tiếp theo.")} />}
+          <details className="policy compactDetails workflowSection"><summary>Hướng dẫn theo tình huống</summary>
+          <SituationGuide key={selectedCenter.id + ":guide"} team={people.get(selectedCenter.owner)?.team ?? ""} guides={data.guides ?? []}
+            manager={viewRole === "head" || viewRole === "lead"} readOnly={readOnly} save={save} busy={busy} />
+          </details>
+          <details className="policy compactDetails workflowSection"><summary>Yêu cầu hỗ trợ</summary>
           <PartnerSupport key={selectedCenter.id + ":support"} centerId={selectedCenter.id!} ownerTeam={people.get(selectedCenter.owner)?.team ?? ""}
             requests={(data.support ?? []).filter((request) => request.centerId === selectedCenter.id)} contacts={data.supportContacts ?? []}
             people={visible} role={viewRole} readOnly={readOnly} save={save} busy={busy} />
+          </details>
+          <details className="policy compactDetails workflowSection"><summary>Lịch sử, lịch hẹn và hồ sơ</summary>
           <div className="centerTimeline">{(["activity", ...partnerActivityKinds.filter((kind) => kind !== "activity")] as const).map((kind) => {
             const linked = rows.filter((entry) => entry.partnerId === selectedCenter.id && entry.kind === kind)
               .sort((a, b) => b.date.localeCompare(a.date) || (b.loggedAt ?? "").localeCompare(a.loggedAt ?? ""));
@@ -628,8 +643,9 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               </li>)}</ul> : <p className="empty">Chưa có bản ghi.</p>}
             </section>;
           })}</div>
+          </details>
         </section>}
-        {data && kinds.includes(view as Kind) && (view !== "logwork" || draft) && <section className="panel">
+        {data && kinds.includes(view as Kind) && (view !== "logwork" || draft) && (view !== "partner" || !selectedCenter || draft) && <section className="panel">
           {view !== "logwork" && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder={view === "partner" ? "Tìm theo tên, tỉnh/thành phố…" : "Tìm theo tên, đối tác, trạng thái…"} value={query} onChange={(e) => setQuery(e.target.value)} />
             {view === "intake" && <button disabled={exportingIntake || !intakeRows.length} onClick={exportIntake}>
               {exportingIntake ? "Đang xuất Excel…" : "Xuất Excel"}

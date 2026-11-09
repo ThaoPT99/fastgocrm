@@ -15,14 +15,13 @@ export default function WorkNextSteps({ day, centers, open }: {
     }));
   const unplanned = items("unplanned");
   return <>
-    <section className="panel policy"><h2>Tình hình công việc với đối tác</h2>
-      <p>Ghi nhận sau khi gặp, gọi hoặc nhắn đối tác. Mỗi trung tâm có một bước tiếp theo, người cần thực hiện và ngày cần theo dõi.</p></section>
     <div className="salesQueues">
-      <SalesQueue title="Đến lượt mình làm" empty="Chưa có việc của bạn đến hạn." items={items("mine")} />
-      <SalesQueue title="Đến lúc hỏi lại" empty="Chưa có việc chờ nào tới ngày hỏi lại." items={items("ask")} />
-      <SalesQueue title="Đang chờ người khác" empty="Chưa có việc đang chờ đối tác hoặc người hỗ trợ." items={items("waiting")} />
-      <SalesQueue title="Việc đã hẹn sắp tới" empty="Chưa có việc cá nhân được hẹn cho ngày tới." items={items("upcoming")} />
+      <SalesQueue title="Cần làm" empty="Chưa có việc đến hạn." items={items("mine")} />
+      <SalesQueue title="Cần hỏi lại" empty="Chưa tới ngày hỏi lại." items={items("ask")} />
+      <SalesQueue title="Đang chờ" empty="Chưa có việc đang chờ." items={items("waiting")} />
     </div>
+    <details className="panel policy compactDetails"><summary>Việc đã hẹn sắp tới</summary>
+      <SalesQueue title="Việc sắp tới" empty="Chưa có lịch sắp tới." items={items("upcoming")} /></details>
     {unplanned.length > 0 && <details className="panel policy"><summary>Trung tâm chưa xác định bước tiếp theo · {unplanned.length}</summary>
       <SalesQueue title="Cần xác định bước tiếp theo" empty="" items={unplanned} /></details>}
   </>;

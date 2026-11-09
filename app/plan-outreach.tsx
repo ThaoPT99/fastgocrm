@@ -1,4 +1,5 @@
 import { defaultOutreach, outreachSchedule, programs, quarterRange, type KpiPlan, type OutreachSettings } from "./kpi-plan";
+import { currentWeek } from "./ai-contract";
 
 export type PlanningCenter = { id?: string; owner: string; title: string; followupDate?: string | null };
 export type PlanningRecord = { kind: string; partnerId?: string | null; date: string };
@@ -9,9 +10,13 @@ export function OutreachInputs({ quarter, settings, change, disabled }: {
 }) {
   const { start, end } = quarterRange(quarter);
   return <section className="panel policy">
-    <h2>3. Giả định và sức làm mỗi ngày</h2>
-    <p>Tỷ lệ 50% và thời gian 2 tuần là giả định ban đầu của khối. Bạn có thể điều chỉnh để tính thử kế hoạch.</p>
-    <fieldset className="planForm planFieldset" disabled={disabled}><div className="formGrid">
+    <h2>3. Sức làm mỗi ngày</h2>
+    <fieldset className="planForm planFieldset" disabled={disabled}>
+      <label>Bạn có thể liên hệ bao nhiêu trung tâm mới mỗi ngày?<input type="number" required min={1} max={100} step={1} value={settings.dailyCapacity}
+        onChange={(event) => change({ ...settings, dailyCapacity: Number(event.target.value) })} /></label>
+      <details className="compactDetails" onInvalidCapture={(event) => { event.currentTarget.open = true; }}>
+      <summary>Giả định đang dùng · {settings.conversion}% gửi hồ sơ · {settings.leadDays} ngày chờ</summary>
+      <div className="formGrid">
       <label>Ngày bắt đầu tiếp cận<input type="date" required min={start} max={end} value={settings.startDate}
         onChange={(event) => change({ ...settings, startDate: event.target.value })} /></label>
       <label>Tỷ lệ trung tâm gửi hồ sơ dự kiến (%)<input type="number" required min={1} max={100} step={1} value={settings.conversion}
@@ -38,10 +43,8 @@ export function OutreachInputs({ quarter, settings, change, disabled }: {
           change({ ...settings, outputByProgram: counts });
         }} /><small>Tổng hai loại cần bằng {settings.filesPerCenter} bộ/trung tâm.</small>
       </label>)}
-      <label>Số trung tâm mới bạn có thể tiếp cận mỗi ngày<input type="number" required min={1} max={100} step={1} value={settings.dailyCapacity}
-        onChange={(event) => change({ ...settings, dailyCapacity: Number(event.target.value) })} /></label>
-    </div></fieldset>
-    <p>Lịch tính theo thứ Hai đến thứ Sáu. Mỗi trung tâm được tính một lần khi bắt đầu liên hệ, các lần gọi lại được theo dõi bằng follow-up.</p>
+      </div></details>
+    </fieldset>
   </section>;
 }
 
@@ -51,6 +54,7 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
 }) {
   const settings = plan.settings ?? defaultOutreach(plan.quarter, day);
   const result = outreachSchedule(plan.quarter, day, remaining, settings);
+  const firstWeek = result.weeks[0];
   const centerMap = new Map(centers.map((center) => [center.id, center]));
   const selected = new Set(settings.centers.map((center) => center.centerId));
   const sourceIds = new Set(plan.sources.map((source) => source.centerId));
@@ -71,11 +75,18 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
 
   return <>
     <section className="panel policy">
-      <h2>4. Kế hoạch tiếp cận được đề xuất</h2>
+      <h2>{firstWeek && currentWeek(firstWeek.from) === currentWeek(day) ? "Việc cần làm tuần này" : "Kế hoạch tiếp cận"}</h2>
+      {result.total > 0 && firstWeek && <p><strong>Tiếp cận {firstWeek.total} trung tâm mới</strong> từ {dateLabel(firstWeek.from)} đến {dateLabel(firstWeek.through)}.</p>}
+      {!result.total ? <p>Nguồn dự kiến đã đủ. Theo dõi các trung tâm đã chọn.</p>
+        : !result.days ? <p className="notice error" role="status">Đã hết thời gian tiếp cận theo kế hoạch. Cùng Team Lead rà nguồn có thể gửi sớm.</p>
+          : result.shortfall > 0 ? <p className="notice error" role="status">Cần khoảng {result.dailyRequired} trung tâm/ngày. Bạn dự kiến làm được {settings.dailyCapacity}. Trao đổi với Team Lead để bổ sung nguồn.</p>
+            : null}
+      <details className="compactDetails">
+      <summary>Cách tính và lịch từng tuần</summary>
       <p>Giả định chuyển đổi {settings.conversion}% · {settings.leadDays} ngày đến lần gửi đầu · {settings.filesPerCenter} hồ sơ đạt chuẩn mỗi trung tâm mới.</p>
       <div className="kpiTargets">
         <div><span>Cần bắt đầu liên hệ</span><strong>{result.total}</strong><span>trung tâm mới</span></div>
-        <div><span>Ngày làm việc còn kịp mốc gửi đầu</span><strong>{result.days}</strong><span>đến {dateLabel(result.deadline)}</span></div>
+        <div><span>Ngày làm việc còn để tiếp cận</span><strong>{result.days}</strong><span>đến {dateLabel(result.deadline)}</span></div>
         <div><span>Cần tiếp cận mỗi ngày</span><strong>{result.dailyRequired || "—"}</strong><span>Khả năng bạn nhập · {settings.dailyCapacity}/ngày</span></div>
       </div>
       <div className="tableWrap mobileCards"><table>
@@ -95,10 +106,10 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
         <tbody>{result.weeks.map((week) => <tr key={week.date}><th scope="row">{dateLabel(week.from)} – {dateLabel(week.through)}</th><td data-label="Số ngày làm việc">{week.days} ngày</td>
           {week.contacts.map((count, index) => <td data-label={"Trung tâm cho " + programs[index]} key={programs[index]}>{count}</td>)}<td data-label="Tổng trung tâm cần tiếp cận"><b>{week.total}</b></td></tr>)}</tbody>
       </table></div>}
+      </details>
     </section>
-    <section className="panel policy">
-      <h2>Trung tâm sẽ tiếp cận</h2>
-      <p>Chọn các trung tâm cụ thể để bắt đầu triển khai. Ngày follow-up và nội dung trao đổi được lưu tại hồ sơ trung tâm.</p>
+    <details className="panel policy compactDetails">
+      <summary>Trung tâm sẽ tiếp cận · {settings.centers.length}</summary>
       {editable && <div className="planForm">
         <label>Thêm trung tâm vào danh sách tiếp cận<select value="" disabled={!available.length || settings.centers.length >= 1000} onChange={(event) => {
           if (event.target.value) change({ ...settings, centers: [...settings.centers, { centerId: event.target.value, program: remaining[0] > 0 ? "D2-6" : "D4-1" }] });
@@ -123,6 +134,6 @@ export default function PlanOutreach({ plan, day, remaining, centers, records, e
       </li>)}</ul>
       <p>Trong danh sách đã chọn · {contacted.length} trung tâm có liên hệ · {sent.length} trung tâm có hồ sơ tiếp nhận{hasStarted && " · Tỷ lệ gửi quan sát được " + Math.round(sent.length * 100 / contacted.length) + "%"}.</p>
       <p>Tỷ lệ quan sát có thể còn thấp khi trung tâm đang chờ tới mốc gửi. Các trung tâm đã có nguồn dự kiến được quản lý ở bước 2. Danh sách tiếp cận giúp theo dõi hành động, số hồ sơ dự kiến được nhập ở bước 2 khi đã có nguồn cụ thể.</p>
-    </section>
+    </details>
   </>;
 }
