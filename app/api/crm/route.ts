@@ -1,7 +1,7 @@
 import { and, asc, desc, eq, gte, lte, inArray, isNull, like, ne, not, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getClient, getDb } from "../../../db";
-import { accessCodes, demoInstalls, kpiPlans, members, records, playbooks, supportRequests } from "../../../db/schema";
+import { accessCodes, demoInstalls, kpiPlans, members, records, playbooks, supportRequests, teamDirectory } from "../../../db/schema";
 import { accessCodeDigest, allowAccessAttempt, getCrmIdentity, validNewPin } from "../../crm-auth";
 import { checklistItemIds, checklistOptionalIds } from "../../intake-checklist";
 import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, statuses, today } from "../../crm";
@@ -16,6 +16,11 @@ export const maxDuration = 60;
 const json = (data: unknown, status = 200) => Response.json(data, {
   status, headers: { "Cache-Control": "no-store" },
 });
+
+function databaseRejected(error: unknown, reason: string) {
+  return error instanceof Error && error.cause instanceof Error &&
+    error.cause.message.includes(reason);
+}
 
 const memberInput = z.object({
   email: z.string().trim().toLowerCase().email().max(254),
@@ -44,6 +49,9 @@ const recordInput = z.object({
 }).refine((record) => (statuses[record.kind] as readonly string[]).includes(record.status) &&
   (record.kind !== "logwork" || record.status !== "Cần hỗ trợ" || record.partner.length > 0));
 const command = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("team-create"), name: z.string().trim().min(1).max(60) }),
+  z.object({ action: z.literal("team-rename"), team: z.string().min(1), name: z.string().trim().min(1).max(60) }),
+  z.object({ action: z.literal("team-status"), team: z.string().min(1), active: z.boolean() }),
   z.object({ action: z.literal("next-step"), centerId: z.string().uuid(), version: z.number().int().positive(),
     nextOwner: z.enum(["self", "partner", "support", "none"]), nextParty: z.string().trim().max(100),
     nextAction: z.string().trim().max(180), nextDate: z.union([z.string().date(), z.literal("")]) }),
@@ -161,7 +169,8 @@ export async function GET(request: Request) {
     if (!editor && !guide.published) return [];
     return [{ ...guide, draft: editor ? guide.draft : undefined, approvedBy: undefined }];
   });
-  return json({ members: roster, records: scopedRows, role: ctx.role, admin: ctx.admin, ownerAdmin: ctx.ownerAdmin, salesMode: ctx.salesMode,
+  const directory = ctx.admin ? await ctx.db.select().from(teamDirectory).orderBy(asc(teamDirectory.name)) : [];
+  return json({ members: roster, teamDirectory: directory, records: scopedRows, role: ctx.role, admin: ctx.admin, ownerAdmin: ctx.ownerAdmin, salesMode: ctx.salesMode,
     email: ctx.email, demoCleared, partnersLinked, followupsReady, codeEmails, intakeCenters, plans, support, supportContacts, guides: guideData });
 }
 
@@ -215,10 +224,17 @@ export async function POST(request: Request) {
         approvedAt: new Date().toISOString(), version: data.version + 1 }).where(condition).returning();
       return updated.length ? json({ ok: true }) : json({ error: "Hướng dẫn vừa thay đổi. Hãy tải lại." }, 409);
     }
-    const saved = data.version === 0
-      ? await ctx.db.insert(playbooks).values({ team: data.team, key: data.key, draft: data.content }).onConflictDoNothing().returning()
-      : await ctx.db.update(playbooks).set({ draft: data.content, version: data.version + 1 }).where(condition).returning();
-    return saved.length ? json({ ok: true }) : json({ error: "Hướng dẫn vừa thay đổi. Hãy tải lại." }, 409);
+    try {
+      const saved = data.version === 0
+        ? await ctx.db.insert(playbooks).values({ team: data.team, key: data.key, draft: data.content }).onConflictDoNothing().returning()
+        : await ctx.db.update(playbooks).set({ draft: data.content, version: data.version + 1 }).where(condition).returning();
+      return saved.length ? json({ ok: true }) : json({ error: "Hướng dẫn vừa thay đổi. Hãy tải lại." }, 409);
+    } catch (error) {
+      if (databaseRejected(error, "known_team_required")) {
+        return json({ error: "Team vừa thay đổi. Hãy tải lại trước khi lưu hướng dẫn." }, 409);
+      }
+      throw error;
+    }
   }
   if (data.action === "support-create" || data.action === "support-reply") {
     if (ctx.role === "intake") return json({ error: "Vai trò hồ sơ chưa có quyền dùng hỗ trợ kinh doanh." }, 403);
@@ -429,14 +445,41 @@ export async function POST(request: Request) {
     }
     return json({ ok: true });
   }
+  if (data.action === "team-create" || data.action === "team-rename" || data.action === "team-status") {
+    if (!ctx.admin) return json({ error: "Chỉ Admin được quản lý team." }, 403);
+    if (data.action === "team-create") {
+      const result = await ctx.db.run(sql`INSERT INTO team_directory (name)
+        SELECT ${data.name} WHERE NOT EXISTS (SELECT 1 FROM team_directory WHERE name = ${data.name} COLLATE NOCASE)`);
+      return result.rowsAffected ? json({ ok: true }) : json({ error: "Tên team đã có trong danh mục." }, 409);
+    }
+    if (data.action === "team-rename") {
+      const result = await ctx.db.update(teamDirectory).set({ name: data.name })
+        .where(and(eq(teamDirectory.name, data.team), sql`NOT EXISTS (
+          SELECT 1 FROM team_directory AS other WHERE other.name = ${data.name} COLLATE NOCASE AND other.name <> ${data.team}
+        )`)).returning();
+      return result.length ? json({ ok: true }) : json({ error: "Tên team đã được dùng hoặc team vừa thay đổi. Hãy tải lại trang." }, 409);
+    }
+    const result = await ctx.db.update(teamDirectory).set({ active: data.active })
+      .where(and(eq(teamDirectory.name, data.team), data.active ? undefined : sql`NOT EXISTS (
+        SELECT 1 FROM members WHERE team = ${data.team}
+      )`)).returning();
+    return result.length ? json({ ok: true }) : json({ error: "Team vừa thay đổi hoặc vẫn còn nhân sự. Hãy chuyển nhân sự sang team khác trước." }, 409);
+  }
   if (data.action === "member") {
     if (!ctx.admin) return json({ error: "Chỉ quản trị viên được quản lý nhân sự." }, 403);
     const input = memberInput.safeParse(data.member);
     if (!input.success) return json({ error: "Kiểm tra email, tên và team của nhân sự." }, 400);
     const member = input.data;
-    await ctx.db.insert(members).values(member).onConflictDoUpdate({
-      target: members.email, set: { name: member.name, role: member.role, team: member.team },
-    });
+    try {
+      await ctx.db.insert(members).values(member).onConflictDoUpdate({
+        target: members.email, set: { name: member.name, role: member.role, team: member.team },
+      });
+    } catch (error) {
+      if (databaseRejected(error, "active_team_required")) {
+        return json({ error: "Hãy chọn một team đang hoạt động trong danh mục." }, 409);
+      }
+      throw error;
+    }
     return json({ ok: true });
   }
 

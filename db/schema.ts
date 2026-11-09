@@ -10,6 +10,11 @@ export const members = sqliteTable("members", {
   team: text().notNull(),
 });
 
+export const teamDirectory = sqliteTable("team_directory", {
+  name: text().primaryKey(),
+  active: integer({ mode: "boolean" }).notNull().default(true),
+});
+
 export const kpiPlans = sqliteTable("kpi_plans", {
   owner: text().notNull().references(() => members.email),
   quarter: text().notNull(),

@@ -22,19 +22,20 @@ import { PartnerSupport, SituationGuide } from "./partner-tools";
 import type { Playbook, SupportRequest } from "./sales-workflow";
 import WorkNextSteps from "./work-next-steps";
 import { NextStepEditor } from "./next-step";
+import TeamDirectory, { type Team } from "./team-directory";
 
 type Member = { email: string; name: string; team: string; role: Role };
 type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; province?: string | null; partnerId?: string | null; notes: string; nextOwner?: NextOwner | null; nextParty?: string | null; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
-type Data = { members: Member[]; records: Entry[]; plans: (KpiPlan & { owner: string })[]; support: SupportRequest[]; supportContacts: Member[]; guides: Playbook[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
-type View = "overview" | "workday" | "people" | "kpi" | "plan" | "guide" | Kind;
+type Data = { members: Member[]; teamDirectory?: Team[]; records: Entry[]; plans: (KpiPlan & { owner: string })[]; support: SupportRequest[]; supportContacts: Member[]; guides: Playbook[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
+type View = "overview" | "workday" | "people" | "teams" | "kpi" | "plan" | "guide" | Kind;
 
-const icons: Record<View, string> = { workday: "✓", overview: "▦", kpi: "↗", plan: "◫", guide: "?", partner: "◇", task: "✓", activity: "↗", meeting: "◷", intake: "▤", logwork: "▧", people: "◎" };
+const icons: Record<View, string> = { workday: "✓", overview: "▦", kpi: "↗", plan: "◫", guide: "?", partner: "◇", task: "✓", activity: "↗", meeting: "◷", intake: "▤", logwork: "▧", people: "◎", teams: "▦" };
 const { logwork, ...otherCategories } = categories;
-const views = { workday: "Việc hôm nay", overview: "Tổng quan", logwork, plan: "Kế hoạch KPI quý", kpi: "KPI & thưởng", ...otherCategories, people: "Nhân sự", guide: "Hướng dẫn sử dụng" };
+const views = { workday: "Việc hôm nay", overview: "Tổng quan", logwork, plan: "Kế hoạch KPI quý", kpi: "KPI & thưởng", ...otherCategories, people: "Nhân sự", teams: "Quản lý team", guide: "Hướng dẫn sử dụng" };
 const navGroups: { label: string; items: View[] }[] = [
   { label: "LÀM VIỆC HẰNG NGÀY", items: ["workday", "partner", "meeting", "intake", "logwork"] },
   { label: "KẾ HOẠCH & BÁO CÁO", items: ["plan", "overview", "kpi"] },
-  { label: "NỘI BỘ", items: ["people", "guide"] },
+  { label: "NỘI BỘ", items: ["people", "teams", "guide"] },
 ];
 const descriptions: Record<View, string> = {
   workday: "Xử lý liên hệ đến hạn, lịch hẹn và hồ sơ cần bổ sung trong phạm vi của bạn.",
@@ -46,6 +47,7 @@ const descriptions: Record<View, string> = {
   overview: "Theo dõi hoạt động và kết quả trong phạm vi bạn phụ trách.",
   kpi: "Tra cứu chỉ tiêu hồ sơ và quy chế thưởng theo từng vai trò.",
   people: "Tra cứu nhân sự, vai trò và nhóm phụ trách.",
+  teams: "Theo dõi cơ cấu team và quân số hiện tại.",
   guide: "Các bước làm việc trong CRM theo đúng vai trò đang mở.",
   task: "Xem công việc đã ghi tại trung tâm.",
   activity: "Xem lịch sử liên hệ với đối tác.",
@@ -259,6 +261,8 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const groups = intakeOnly ? [{ label: "TIẾP NHẬN", items: ["intake", "guide"] as View[] }] : navGroups;
   const readOnly = Boolean(previewRole);
   const managing = Boolean(data?.admin && !readOnly);
+  const directory = data?.teamDirectory ?? [];
+  const activeTeams = directory.filter((team) => team.active);
   const canSetCodes = !readOnly && data?.role === "head";
   const visible = roster.filter((member) => {
     if (previewRole === "lead") return Boolean(previewScope) && member.team === previewScope;
@@ -382,7 +386,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           onClick={() => setMenuOpen(!menuOpen)}>{menuOpen ? "Đóng menu" : "☰ Menu"}</button></div>
       <nav id="workspace-menu" className={menuOpen ? "workspaceNav menuOpen" : "workspaceNav"} aria-label="Điều hướng chính">{groups.map((group) =>
         <div className="navGroup" key={group.label}><span className="navLabel">{group.label}</span>
-          {group.items.filter((key) => key !== "workday" || showWorkday).map((key) =>
+          {group.items.filter((key) => (key !== "workday" || showWorkday) && (key !== "teams" || managing)).map((key) =>
             <button key={key} aria-current={key === view ? "page" : undefined} onClick={() => changeView(key)}><span aria-hidden="true">{icons[key]}</span>{views[key]}</button>)}
         </div>)}</nav>
       <div className="sidebarFoot"><i /> Nội bộ Fastgo</div>
@@ -436,6 +440,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           {previewRole && <span>{!previewScope && (previewRole === "lead" || previewRole === "sale") ? "Thêm nhân sự hoặc nhóm thật để xem dữ liệu trong phạm vi này." : "Đang xem thử · Chỉ xem"}</span>}
         </section>}
         {view === "guide" && viewRole && <WorkGuide role={viewRole} go={changeView} />}
+        {view === "teams" && managing && <TeamDirectory teams={directory} members={roster} save={save} busy={busy} />}
         {data && (view === "overview" || (intakeOnly && view === "intake")) && <section className="toolbar startHere">
           <div><b>Mới sử dụng CRM?</b> <span>{intakeOnly ? "Xem cách tạo hồ sơ và ghi số giấy tờ đã nhận."
             : "Xem quy trình theo vai trò và cách rà kế hoạch của nhân sự."}</span></div>
@@ -590,7 +595,14 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             <label>Họ tên<input required maxLength={100} value={person.name} onChange={(e) => setPerson({ ...person, name: e.target.value })} /></label>
             <label>Email<input type="email" required maxLength={254} value={person.email} onChange={(e) => setPerson({ ...person, email: e.target.value })} /></label>
             <label>Vai trò<select value={person.role} onChange={(e) => setPerson({ ...person, role: e.target.value as Role })}>{Object.entries(roles).map(([key, role]) => <option key={key} value={key}>{role}</option>)}</select></label>
-            <label>Team<input required={person.role === "lead" || person.role === "sale"} maxLength={60} placeholder="Ví dụ Team 01" value={person.team} onChange={(e) => setPerson({ ...person, team: e.target.value })} /></label>
+            <label>Team<select required={person.role === "lead" || person.role === "sale"} value={person.team} onChange={(e) => setPerson({ ...person, team: e.target.value })}>
+              <option value="">{person.role === "lead" || person.role === "sale" ? "Chọn team" : "Không thuộc team"}</option>
+              {activeTeams.map((team) => <option key={team.name} value={team.name}>{team.name}</option>)}
+            </select></label>
+            {!activeTeams.length && (person.role === "lead" || person.role === "sale") && <div>
+              <p>Cần có team hoạt động trước khi gán nhân sự.</p>
+              <button type="button" disabled={busy} onClick={() => changeView("teams")}>Đi tới Quản lý team</button>
+            </div>}
             <div className="actions"><button type="button" onClick={() => setPerson(undefined)}>Hủy</button><button className="primary" disabled={busy}>Lưu nhân sự</button></div>
           </form>}
           <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Team</th>{canSetCodes && <th>Thao tác</th>}</tr></thead><tbody>
