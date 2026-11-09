@@ -138,7 +138,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     setMessage("");
     try {
       const res = await fetch("/api/crm", { method: "POST", headers: crmHeaders(true), body: JSON.stringify(payload) });
-      const body = await res.json() as { error?: string; historicalOnly?: boolean };
+      const body = await res.json() as { error?: string; historicalOnly?: boolean; createdCenterId?: string };
       if (!res.ok) throw new Error(body.error || "Không lưu được dữ liệu.");
       if (signInAgain) {
         window.location.reload();
@@ -154,6 +154,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
       setMessage(body.historicalOnly ? "Đã ghi hoạt động ngày cũ vào lịch sử. Bước tiếp theo dùng bản cập nhật mới hơn." : notice);
       closePinForm();
       await refresh();
+      if (firstCenterDraft && body.createdCenterId) setCenterId(body.createdCenterId);
       return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Không kết nối được.");
@@ -277,6 +278,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const intakeCenters = data?.intakeCenters ?? [];
   const centersById = new Map(centers.map((entry) => [entry.id, entry]));
   const selectedCenter = centerId ? centersById.get(centerId) : undefined;
+  const firstCenterDraft = viewRole === "sale" && !centers.length && draft?.kind === "partner" && !draft.id;
   const linkedCenterName = (entry: Entry) => centersById.get(entry.partnerId ?? undefined)?.title
     ?? intakeCenters.find((center) => center.id === entry.partnerId)?.title ?? entry.partner;
   const intakeRows = view === "intake" ? rows.filter((entry) => entry.kind === "intake") : [];
@@ -313,6 +315,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     const last = latestContact.get(activity.partnerId);
     if (!last || activity.date > last.date || (activity.date === last.date && (activity.loggedAt ?? "") >= (last.loggedAt ?? ""))) latestContact.set(activity.partnerId, activity);
   }
+  const selectedContact = selectedCenter?.id ? latestContact.get(selectedCenter.id) : undefined;
   const lateCenters = centers.filter((center) => followupGroup(center.followupDate, day) === "late");
   const filtered = rows.filter((entry) => entry.kind === view &&
     (view !== "partner" || followupFilter === "all" || followupGroup(entry.followupDate, day) === followupFilter) &&
@@ -448,6 +451,15 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           open={openCenter} goPartners={() => changeView("partner")} analyze={analyzePlan} />}
         {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "workday" && <>
+          {!readOnly && !centers.length && <section className="panel">
+            <h2>Thêm trung tâm bạn định liên hệ</h2>
+            <p>Sau khi lưu, bạn có thể đặt ngày liên hệ hoặc ghi lại cuộc trao đổi đã diễn ra.</p>
+            <button className="primary" onClick={() => {
+              changeView("partner");
+              setCenterOrigin("workday");
+              startEntry("partner", data.email);
+            }}>Thêm trung tâm đầu tiên</button>
+          </section>}
           {centers.length > 0 && <WorkNextSteps day={day} centers={centers} open={(id) => openCenter(id)} />}
           {centers.length > 0 && <ContactPriorities day={day} centers={centers} records={rows}
             plan={data.plans?.find((plan) => plan.owner === (previewRole ? previewScope : data.email) && plan.quarter === quarterOf(day))}
@@ -463,7 +475,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             <div className="rowActions">
               <button onClick={() => changeView("plan")}>Kế hoạch KPI quý</button>
               <button onClick={() => changeView("logwork")}>Nhật ký làm việc</button>
-              {!readOnly && <button className="primary" onClick={() => { changeView("partner"); startEntry("partner", data.email); }}>{centers.length ? "+ Thêm trung tâm" : "Thêm trung tâm đầu tiên"}</button>}
+              {!readOnly && centers.length > 0 && <button className="primary" onClick={() => { changeView("partner"); startEntry("partner", data.email); }}>+ Thêm trung tâm</button>}
             </div>
           </div>
           <DailyGreeting name={roster.find((member) => member.email === data.email)?.name ?? name} day={day} />
@@ -604,9 +616,9 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             {selectedCenter.followupDate ? <span>{selectedCenter.followupAction} · <span className={followupGroup(selectedCenter.followupDate, day) === "late" ? "pill danger" : "pill"}>{selectedCenter.followupDate}</span></span>
               : <span>Chưa đặt lịch</span>}
           </div>
-          {latestContact.get(selectedCenter.id!) && <div className="sectionHead">
-            <div><b>Lần trao đổi gần nhất</b><p>{activityWhen(latestContact.get(selectedCenter.id!)!)} · {latestContact.get(selectedCenter.id!)!.title}</p>
-              {latestContact.get(selectedCenter.id!)!.notes && <div className="notes">{latestContact.get(selectedCenter.id!)!.notes}</div>}</div>
+          {selectedContact && <div className="sectionHead">
+            <div><b>Lần trao đổi gần nhất</b><p>{activityWhen(selectedContact)} · {selectedContact.title}</p>
+              {selectedContact.notes && <div className="notes">{selectedContact.notes}</div>}</div>
           </div>}
           {!readOnly && <NextStepEditor key={selectedCenter.id + ":step:" + selectedCenter.version} center={selectedCenter} save={save} disabled={busy || updatingCenter} />}
           {!readOnly && <details className="policy compactDetails workflowSection"><summary>Trợ lý AI</summary><PartnerAssistant key={selectedCenter.id + ":" + selectedCenter.version} centerId={selectedCenter.id!} ask={askAssistant} disabled={busy} apply={(value) => {
@@ -646,7 +658,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           </details>
         </section>}
         {data && kinds.includes(view as Kind) && (view !== "logwork" || draft) && (view !== "partner" || !selectedCenter || draft) && <section className="panel">
-          {view !== "logwork" && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder={view === "partner" ? "Tìm theo tên, tỉnh/thành phố…" : "Tìm theo tên, đối tác, trạng thái…"} value={query} onChange={(e) => setQuery(e.target.value)} />
+          {view !== "logwork" && !firstCenterDraft && <div className="sectionHead"><input className="search" type="search" aria-label="Tìm bản ghi" placeholder={view === "partner" ? "Tìm theo tên, tỉnh/thành phố…" : "Tìm theo tên, đối tác, trạng thái…"} value={query} onChange={(e) => setQuery(e.target.value)} />
             {view === "intake" && <button disabled={exportingIntake || !intakeRows.length} onClick={exportIntake}>
               {exportingIntake ? "Đang xuất Excel…" : "Xuất Excel"}
             </button>}
@@ -656,20 +668,23 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               setUpdatingCenter(false);
               startEntry(view as Kind, owner);
             }}>+ Thêm {itemLabels[view as Kind]}</button>}</div>}
-          {view === "partner" && <div className="followupFilters" aria-label="Lọc follow-up">
+          {view === "partner" && !firstCenterDraft && <div className="followupFilters" aria-label="Lọc follow-up">
             {(Object.keys(followupFilters) as FollowupFilter[]).map((key) => <button key={key} aria-pressed={key === followupFilter} onClick={() => setFollowupFilter(key)}>
               {followupFilters[key]} <b>{key === "all" ? centers.length : centers.filter((center) => followupGroup(center.followupDate, day) === key).length}</b>
             </button>)}
           </div>}
           {!visible.length && !readOnly && !intakeOnly && <div className="empty"><p>Cần có nhân sự phụ trách trước khi thêm bản ghi.</p>{managing && <button onClick={() => { changeView("people"); setPerson(emptyMember); }}>Thêm nhân sự</button>}</div>}
           {intakeOnly && !readOnly && !intakeCenters.length && <p className="empty">Cần có trung tâm B2B trước khi tạo hồ sơ tiếp nhận.</p>}
-          {draft && <form className="form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save({ action: "record", record: draft }, "Đã lưu bản ghi."); }}>
+          {firstCenterDraft && <h2>Thêm trung tâm đầu tiên</h2>}
+          {draft && <form className="form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save({ action: "record", record: draft }, draft.kind === "partner" ? "Đã lưu trung tâm." : "Đã lưu bản ghi."); }}>
             <label>{draft.kind === "logwork" ? draft.id && !draft.loggedAt ? "Việc tiếp theo" : "Hoạt động đã làm" : draft.kind === "partner" ? "Tên trung tâm" : draft.kind === "intake" ? "Tên học sinh / mã hồ sơ" : "Tiêu đề"}<input ref={titleField} required maxLength={180} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
             {draft.kind === "partner" && <label>Tỉnh/thành phố<input maxLength={100} value={draft.province ?? ""}
               onChange={(event) => setDraft({ ...draft, province: event.target.value })} /></label>}
+            {!firstCenterDraft && <>
             <label>Người phụ trách<select disabled={draft.kind === "logwork" || intakeOnly} value={draft.owner} onChange={(e) => setDraft({ ...draft, owner: e.target.value, partnerId: undefined })}>{intakeOnly && <option value="">Theo trung tâm đã chọn</option>}{visible.map((member) => <option key={member.email} value={member.email}>{member.name}</option>)}</select></label>
             <label>Trạng thái<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>{statuses[draft.kind].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label>{draft.kind === "task" ? "Hạn xử lý" : "Ngày"}<input type="date" readOnly={draft.kind === "logwork"} required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
+            </>}
             {intakeOnly ? <label>Trung tâm B2B{draft.id ? <input value={linkedCenterName(draft)} readOnly />
               : <select required value={draft.partnerId ?? ""} onChange={(event) => {
                 const center = intakeCenters.find((item) => item.id === event.target.value);
@@ -688,9 +703,12 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             </label> : <label>{draft.kind === "logwork" ? "Vướng mắc / cần hỗ trợ" : "Đầu mối liên hệ"}<input required={draft.kind === "logwork" && draft.status === "Cần hỗ trợ"} maxLength={180} value={draft.partner} onChange={(e) => setDraft({ ...draft, partner: e.target.value })} /></label>}
             <label>{draft.kind === "logwork" ? "Kết quả / ghi chú" : "Ghi chú"}<textarea maxLength={4000} rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></label>
             {draft.kind === "intake" && <IntakeChecklistFields value={draft.intakeChecklist} onChange={(value) => setDraft({ ...draft, intakeChecklist: value })} />}
-            <div className="actions"><button type="button" onClick={() => setDraft(undefined)}>Hủy</button><button className="primary" disabled={busy}>{draft.kind === "intake" ? "Lưu hồ sơ" : "Lưu bản ghi"}</button></div>
+            <div className="actions"><button type="button" disabled={busy} onClick={() => {
+              if (firstCenterDraft && centerOrigin) changeView(centerOrigin);
+              else setDraft(undefined);
+            }}>Hủy</button><button className="primary" disabled={busy}>{draft.kind === "intake" ? "Lưu hồ sơ" : draft.kind === "partner" ? "Lưu trung tâm" : "Lưu bản ghi"}</button></div>
           </form>}
-          {view !== "logwork" && <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>{view === "partner" ? "Trung tâm" : view === "intake" ? "Hồ sơ học sinh" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
+          {view !== "logwork" && !firstCenterDraft && <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>{view === "partner" ? "Trung tâm" : view === "intake" ? "Hồ sơ học sinh" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
           {filtered.map((entry) => {
             const progress = intakeProgress.get(entry);
             const missing = progress ? progress.total - progress.completed : 0;

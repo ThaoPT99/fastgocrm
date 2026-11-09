@@ -30,8 +30,8 @@ export function NextStepFields({ value, change }: { value: StepValue; change: (v
       <label>{value.nextOwner === "self" ? "Ngày cần làm" : "Ngày cần hỏi lại nếu chưa có kết quả"}<input name="nextDate" type="date" required
         value={value.nextDate} onInput={(event) => change({ ...value, nextDate: event.currentTarget.value })}
         onChange={(event) => change({ ...value, nextDate: event.target.value })} /></label>
-      <small className="wideField">{value.nextOwner === "self" ? "Đến ngày này, việc xuất hiện trong Đến lượt mình làm."
-        : "Trước ngày hẹn, trung tâm nằm trong Đang chờ người khác. Đến ngày hẹn, CRM đưa vào Đến lúc hỏi lại."}</small>
+      <small className="wideField">{value.nextOwner === "self" ? "Đến ngày hẹn, việc xuất hiện trong Cần làm."
+        : "Trước ngày hẹn, trung tâm nằm trong Đang chờ. Đến ngày hẹn, trung tâm chuyển sang Cần hỏi lại."}</small>
     </>}
   </>;
 }
@@ -39,10 +39,13 @@ export function NextStepFields({ value, change }: { value: StepValue; change: (v
 export function NextStepEditor({ center, save, disabled }: {
   center: NextStep & { id?: string; version?: number }; save: WorkflowSave; disabled: boolean;
 }) {
-  const [value, setValue] = useState(() => stepValue(center));
-  return <details className="policy workflowSection">
-    <summary>Đặt hoặc đổi bước tiếp theo</summary>
-    <p>Dùng khi lên lịch hoặc đổi người đang chờ xử lý. Ghi việc đã diễn ra bằng Ghi kết quả trao đổi.</p>
+  const unscheduled = !center.followupDate && nextOwnerOf(center) === "none";
+  const [value, setValue] = useState(() => {
+    const step = stepValue(center);
+    return unscheduled ? { ...step, nextOwner: "self" as const } : step;
+  });
+  return <details className="policy compactDetails workflowSection">
+    <summary>{unscheduled ? "Đặt ngày liên hệ" : "Đặt hoặc đổi bước tiếp theo"}</summary>
     <form className="form" onSubmit={(event) => {
       event.preventDefault();
       void save({ action: "next-step", centerId: center.id, version: center.version, ...readStep(event.currentTarget) }, "Đã cập nhật bước tiếp theo.");

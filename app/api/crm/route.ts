@@ -531,8 +531,10 @@ export async function POST(request: Request) {
       .returning({ id: records.id });
     if (!updated.length) return json({ error: "Bản ghi đã thay đổi hoặc không còn truy cập được. Tải lại trang." }, 409);
   } else {
-    await ctx.db.insert(records).values({ id: crypto.randomUUID(), ...record,
+    const createdId = crypto.randomUUID();
+    await ctx.db.insert(records).values({ id: createdId, ...record,
       loggedAt: record.kind === "logwork" ? new Date().toISOString() : null });
+    if (record.kind === "partner") return json({ ok: true, createdCenterId: createdId });
   }
   return json({ ok: true });
 }

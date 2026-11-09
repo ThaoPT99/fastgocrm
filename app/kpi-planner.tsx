@@ -138,7 +138,7 @@ function QuarterPlan({ day, quarter, role, centers, records, goPartners, saved, 
     {(!editable || step === 0) && <section className="panel policy">
       <h2>1. Chỉ tiêu và số đã đạt</h2>
       <p>KPI cá nhân của quý đã chọn · {targets[0]} D2-6 và {targets[1]} D4-1, tổng {targets[0] + targets[1]} hồ sơ đạt chuẩn.</p>
-      {editable && <div className="planForm"><p>Nhập số đã đối soát. Nếu chưa có, giữ số 0.</p>
+      {editable && <div className="planForm"><p>Chỉ nhập hồ sơ đã được xác nhận đạt chuẩn KPI. Nếu chưa có, giữ số 0.</p>
         <div className="formGrid">{countFields(plan.actual, (actual) => setPlan({ ...plan, actual }), "Đã đạt ")}</div></div>}
       {!editable && <p>Đã đạt {plan.actual[0]} D2-6 và {plan.actual[1]} D4-1.</p>}
     </section>}
