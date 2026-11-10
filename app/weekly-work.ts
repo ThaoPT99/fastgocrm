@@ -4,7 +4,7 @@ export type WeeklyRecord = {
 };
 export type WeeklyMember = { email: string; name: string; team: string };
 
-export function summarizeWeek(members: WeeklyMember[], records: WeeklyRecord[], from: string, to: string, day: string) {
+export function summarizeWeek<Record extends WeeklyRecord>(members: WeeklyMember[], records: Record[], from: string, to: string, day: string) {
   const period = records.filter((record) => record.date >= from && record.date <= to);
   return members.map((member) => {
     const activities = period.filter((record) => record.date <= day &&

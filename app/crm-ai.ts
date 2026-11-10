@@ -37,8 +37,8 @@ export async function partnerAssistance(mode: PartnerAiMode, data: unknown) {
 
 export async function weeklyAssistance(data: unknown, team: boolean) {
   return requestDeepSeek(
-    (team ? "Chuẩn bị cuộc họp Team Lead dựa trên các số liệu và hoạt động trong kỳ. Tổng hợp việc đã làm, vướng mắc được ghi nhận và câu hỏi cần trao đổi với từng nhân sự có liên quan. Không đánh giá con người từ số lượt liên hệ. Chỉ nêu số liệu do hệ thống cung cấp."
-      : "Rà công việc trong tuần của một nhân viên. Tóm tắt việc đã làm, lịch đến hạn và tiến độ kế hoạch; đề xuất 2-4 việc ưu tiên tuần tới. Phân biệt hồ sơ tiếp nhận với hồ sơ đạt chuẩn đã đối soát. Không có kế hoạch đã lưu thì nêu rõ cần lập kế hoạch.")
-      + outputInstructions, data, crmAiOutput,
+    (team ? "Viết báo cáo công việc tuần cho nhóm, dùng giọng trung tính." : "Viết báo cáo công việc tuần của một nhân viên, dùng giọng trung tính.")
+      + " Viết tiếng Việt, 1–3 đoạn văn ngắn, sẵn để sao chép. Nêu kỳ báo cáo, công việc và kết quả đã ghi nhận, vướng mắc và bước tiếp theo nếu có căn cứ. Phân biệt lịch đã hoàn tất với lịch dự kiến, hồ sơ tiếp nhận với hồ sơ đạt chuẩn KPI. Nếu không có hoạt động đã ghi, nêu rõ điều đó. Không dùng danh sách, Markdown hay lời chào. Trả JSON chỉ có trường summary, tối đa 1600 ký tự.",
+    data, crmAiOutput,
   );
 }

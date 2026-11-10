@@ -5,11 +5,12 @@ import { accessCodes, demoInstalls, kpiPlans, members, records, playbooks, suppo
 import { accessCodeDigest, allowAccessAttempt, getCrmIdentity, validNewPin } from "../../crm-auth";
 import { checklistItemIds, checklistOptionalIds } from "../../intake-checklist";
 import { followupChannels, isDemoEmail, needsPartner, partnerActivityKinds, statuses, today } from "../../crm";
-import { personalTargets, planInput, quarterOf } from "../../kpi-plan";
+import { planInput } from "../../kpi-plan";
 import { analyzeKpiPlan } from "../../plan-analysis";
 import { contactEvidence, partnerAssistance, weeklyAssistance } from "../../crm-ai";
 import { partnerOutcomes } from "../../plan-monitor";
 import { situationKeys, supportInput } from "../../sales-workflow";
+import { summarizeWeek } from "../../weekly-work";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -286,8 +287,9 @@ export async function POST(request: Request) {
       });
       return json(result, result.status);
     }
-    if (data.from > data.to || (Date.parse(data.to) - Date.parse(data.from)) / 86_400_000 > 31) {
-      return json({ error: "Chọn khoảng thời gian tối đa 31 ngày." }, 400);
+    const reportDay = today();
+    if (data.from > data.to || data.to > reportDay || (Date.parse(data.to) - Date.parse(data.from)) / 86_400_000 > 31) {
+      return json({ error: "Chọn khoảng thời gian hợp lệ đến hôm nay, tối đa 31 ngày." }, 400);
     }
     if (data.teamReview && ctx.role !== "head" && ctx.role !== "lead") return json({ error: "Chỉ Trưởng nhóm và Trưởng khối được tổng hợp họp nhóm." }, 403);
     const membersInScope = ctx.visible.filter((person) => person.role !== "intake" &&
@@ -296,23 +298,19 @@ export async function POST(request: Request) {
     if (!await allowAccessAttempt("assistant-ai:" + ctx.email, 20)) return json({ error: "Đã dùng 20 lượt trợ lý trong 10 phút. Bạn thử lại sau." }, 429);
     const owners = membersInScope.map((person) => person.email);
     const periodRows = await ctx.db.select().from(records)
-      .where(and(inArray(records.owner, owners), gte(records.date, data.from), lte(records.date, data.to)));
-    const centers = await ctx.db.select().from(records).where(and(eq(records.kind, "partner"), inArray(records.owner, owners)));
-    const plans = await ctx.db.select().from(kpiPlans).where(and(inArray(kpiPlans.owner, owners), eq(kpiPlans.quarter, quarterOf(data.to))));
-    const report = membersInScope.map((person) => {
-      const personRows = periodRows.filter((record) => record.kind === "logwork" ? record.owner === person.email : (record.performedBy ?? record.owner) === person.email);
-      const plan = plans.find((item) => item.owner === person.email);
-      return {
-        nhanSu: person.name, nhom: person.team, vaiTro: person.role,
-        luotLienHe: personRows.filter((record) => record.kind === "activity").length,
-        hoSoTiepNhanTrongKy: periodRows.filter((record) => record.owner === person.email && record.kind === "intake").length,
-        trungTamQuaHen: centers.filter((center) => center.owner === person.email && center.followupDate && center.followupDate <= today()).length,
-        hoatDong: contactEvidence(personRows).slice(0, 5),
-        keHoach: plan ? { quy: plan.quarter, chiTieu: personalTargets(person.role as "head" | "lead" | "sale"), daDatChuan: plan.actual,
-          nguonConDuKien: [0, 1].map((index) => plan.sources.filter((source) => source.date >= today()).reduce((sum, source) => sum + source.counts[index], 0)) } : null,
-      };
-    });
-    const result = await weeklyAssistance({ tuNgay: data.from, denNgay: data.to, ngayHienTai: today(), nhanSu: report.slice(0, 30), tongNhanSu: report.length }, data.teamReview);
+      .where(and(inArray(records.owner, ctx.visible.map((person) => person.email)),
+        or(inArray(records.owner, owners), inArray(records.performedBy, owners)),
+        inArray(records.kind, ["activity", "logwork", "intake", "meeting"]),
+        gte(records.date, data.from), lte(records.date, data.to)));
+    const report = summarizeWeek(membersInScope, periodRows, data.from, data.to, reportDay).map((item) => ({
+      nhanSu: item.member.name, nhom: item.member.team,
+      luotLienHe: item.contacts.length, trungTamDaLienHe: item.centers.length, viecNoiBo: item.internal.length,
+      hoSoTiepNhanTrongKy: item.intakes.length, canHoTro: item.support.length,
+      lichHenHoanTat: item.meetings.filter((record) => record.status === "Hoàn tất").length,
+      tongLichHenTrongKy: item.meetings.length,
+      hoatDongGanNhat: contactEvidence(item.activities).slice(0, 5),
+    }));
+    const result = await weeklyAssistance({ tuNgay: data.from, denNgay: data.to, ngayHienTai: reportDay, nhanSu: report.slice(0, 30), tongNhanSu: report.length }, data.teamReview);
     return json(result, result.status);
   }
   if (data.action === "analyze-plan") {

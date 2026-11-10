@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { currentWeek, partnerAiModes, type CrmAiOutput, type PartnerAiMode } from "./ai-contract";
+import { partnerAiModes, type CrmAiOutput, type PartnerAiMode } from "./ai-contract";
 import { followupChannels } from "./crm";
 import type { FollowupUpdate } from "./partner-followup";
 
@@ -70,40 +70,42 @@ export function PartnerAssistant({ centerId, ask, apply, disabled }: {
   </section>;
 }
 
-export function WeeklyAssistant({ day, team, canReviewTeam, ask, range, owner, personLabel }: {
-  day: string; team: string; canReviewTeam: boolean; ask: AskAssistant;
-  range?: { from: string; to: string }; owner?: string; personLabel?: string;
+export function WeeklyAssistant({ team, canReviewTeam, ask, range: { from, to }, owner, personLabel }: {
+  team: string; canReviewTeam: boolean; ask: AskAssistant;
+  range: { from: string; to: string }; owner?: string; personLabel?: string;
 }) {
-  const [from, setFrom] = useState(range?.from ?? currentWeek(day));
-  const [to, setTo] = useState(range?.to ?? day);
-  const [result, setResult] = useState<CrmAiOutput>();
+  const [report, setReport] = useState("");
+  const [copyStatus, setCopyStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function run(teamReview: boolean) {
+  async function run() {
     if (busy) return;
-    if (!from || !to || from > to || Date.parse(to) - Date.parse(from) > 31 * 86_400_000) {
-      setError("Chọn khoảng thời gian hợp lệ, tối đa 31 ngày."); return;
+    setBusy(true); setError(""); setCopyStatus("");
+    try {
+      const result = await ask({ action: "weekly-ai", teamReview: canReviewTeam,
+        team: canReviewTeam ? team : undefined, owner: canReviewTeam ? undefined : owner, from, to });
+      setReport(result.summary);
     }
-    setBusy(true); setError(""); setResult(undefined);
-    try { setResult(await ask({ action: "weekly-ai", teamReview, team: teamReview ? team : undefined, owner: teamReview ? undefined : owner, from, to })); }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Chưa nhận được kết quả từ AI."); }
     finally { setBusy(false); }
   }
-  return <section className="panel policy planAi">
-    <h2>Trợ lý rà công việc và chuẩn bị họp</h2>
-    <p>Gửi số liệu hoạt động, các ghi chú gần nhất và tiến độ KPI trong phạm vi của bạn tới AI khi bấm phân tích. Dữ liệu chi tiết được rút gọn; có thể đối chiếu đầy đủ ở nhật ký.</p>
-    {!range && <div className="planForm"><div className="formGrid">
-      <label>Từ ngày<input type="date" required disabled={busy} max={to || day} value={from} onChange={(event) => { setFrom(event.target.value); setResult(undefined); }} /></label>
-      <label>Đến ngày<input type="date" required disabled={busy} min={from} max={day} value={to} onChange={(event) => { setTo(event.target.value); setResult(undefined); }} /></label>
-    </div></div>}
+  return <section className="policy planAi" aria-busy={busy}>
+    <h2>Báo cáo tuần bằng AI</h2>
+    <p>Khi bấm tạo, số liệu và ghi chú gần nhất của {personLabel || team || "phạm vi đang xem"} trong tuần đã chọn sẽ được gửi tới AI.</p>
     <div className="rowActions">
-      {(!canReviewTeam || owner) && <button type="button" disabled={busy} onClick={() => void run(false)}>
-        {personLabel ? "AI nhận xét tuần của " + personLabel : "AI rà tuần của tôi"}
-      </button>}
-      {canReviewTeam && <button type="button" disabled={busy} onClick={() => void run(true)}>AI chuẩn bị họp {team || "toàn đội"}</button>}
+      <button className="primary" type="button" disabled={busy} onClick={() => void run()}>
+        {busy ? "AI đang tổng hợp…" : report ? "Tạo lại báo cáo" : "Tạo báo cáo tuần"}
+      </button>
     </div>
-    {busy && <p role="status">AI đang tổng hợp…</p>}
     {error && <p className="notice error" role="alert">{error}</p>}
-    {result && <AssistantResult result={result} />}
+    {report && <div className="aiResult">
+      <label>Bản nháp báo cáo<textarea rows={7} disabled={busy} value={report}
+        onChange={(event) => { setReport(event.target.value); setCopyStatus(""); }} /></label>
+      <button type="button" disabled={busy || !report.trim()} onClick={async () => {
+        try { await navigator.clipboard.writeText(report.trim()); setCopyStatus("Đã sao chép báo cáo."); }
+        catch { setCopyStatus("Bạn có thể chọn và sao chép đoạn văn trong ô báo cáo."); }
+      }}>Sao chép báo cáo</button>
+      {copyStatus && <p role="status">{copyStatus}</p>}
+    </div>}
   </section>;
 }

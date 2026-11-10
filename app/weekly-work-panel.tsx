@@ -14,8 +14,6 @@ export default function WeeklyWorkPanel({ day, members, records, team, setTeam, 
 }) {
   const [week, setWeek] = useState(currentWeek(day));
   const [person, setPerson] = useState("");
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState("");
   const teams = [...new Set(members.map((member) => member.team).filter(Boolean))];
   const teamMembers = members.filter((member) => !team || member.team === team);
   const people = teamMembers.filter((member) => !person || member.email === person);
@@ -28,37 +26,10 @@ export default function WeeklyWorkPanel({ day, members, records, team, setTeam, 
   const centers = new Map(records.filter((record) => record.kind === "partner" && record.id).map((record) => [record.id, record.title]));
   const owner = people.length === 1 ? people[0].email : undefined;
 
-  async function exportReport() {
-    setExporting(true);
-    setExportError("");
-    try {
-      const { weeklyWorkWorkbook } = await import("./weekly-work-export");
-      const workbook = await weeklyWorkWorkbook(summaries, centers, week, to, day);
-      const url = URL.createObjectURL(workbook);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `fastgo-bao-cao-tuan-${week}-den-${to}.xlsx`;
-      document.body.append(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
-    } catch {
-      setExportError("Chưa xuất được báo cáo Excel. Hãy thử lại.");
-    } finally {
-      setExporting(false);
-    }
-  }
-
   return <>
     <section className="panel policy">
-      <div className="sectionHead">
-        <div><h2>Tổng hợp công việc tuần</h2>
-          <p>Từ {dateLabel(week)} đến {dateLabel(to)}{to > day && " · Hoạt động được ghi nhận tới " + dateLabel(day)}.</p></div>
-        <button type="button" className="primary" disabled={exporting || !summaries.length} onClick={exportReport}>
-          {exporting ? "Đang xuất báo cáo…" : "Xuất báo cáo Excel"}
-        </button>
-      </div>
-      {exportError && <p role="alert" className="notice error">{exportError}</p>}
+      <h2>Tổng hợp công việc tuần</h2>
+      <p>Từ {dateLabel(week)} đến {dateLabel(to)}{to > day && " · Hoạt động được ghi nhận tới " + dateLabel(day)}.</p>
       <div className="toolbar weeklyControls">
         <label>Chọn ngày trong tuần<input type="date" required max={day} value={week} onChange={(event) => {
           if (event.target.value) setWeek(currentWeek(event.target.value));
@@ -73,6 +44,9 @@ export default function WeeklyWorkPanel({ day, members, records, team, setTeam, 
           <button type="button" disabled={week >= currentWeek(day)} onClick={() => setWeek(addDays(week, 7))}>Tuần sau</button>
           <button type="button" onClick={() => setWeek(currentWeek(day))}>Tuần này</button></div>
       </div>
+      {!readOnly && people.length > 0 && <WeeklyAssistant key={JSON.stringify([week, day, team, owner])} team={team}
+        range={{ from: week, to: to > day ? day : to }} owner={owner} personLabel={owner ? people[0].name : undefined}
+        canReviewTeam={canReviewTeam && !owner} ask={ask} />}
       <div className="kpiTargets">
         <div><span>Lượt liên hệ đã ghi</span><strong>{contacts}</strong></div>
         <div><span>Trung tâm đã liên hệ</span><strong>{uniqueCenters}</strong></div>
@@ -109,8 +83,5 @@ export default function WeeklyWorkPanel({ day, members, records, team, setTeam, 
         </li>)}</ul>}
       </details>)}
     </section>
-    {!readOnly && people.length > 0 && <WeeklyAssistant key={week + team + (owner ?? "")} day={day} team={team}
-      range={{ from: week, to: to > day ? day : to }} owner={owner} personLabel={owner ? people[0].name : undefined}
-      canReviewTeam={canReviewTeam && !owner} ask={ask} />}
   </>;
 }
