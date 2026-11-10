@@ -14,6 +14,8 @@ export default function WeeklyWorkPanel({ day, members, records, team, setTeam, 
 }) {
   const [week, setWeek] = useState(currentWeek(day));
   const [person, setPerson] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const teams = [...new Set(members.map((member) => member.team).filter(Boolean))];
   const teamMembers = members.filter((member) => !team || member.team === team);
   const people = teamMembers.filter((member) => !person || member.email === person);
@@ -25,10 +27,38 @@ export default function WeeklyWorkPanel({ day, members, records, team, setTeam, 
   const support = summaries.reduce((sum, item) => sum + item.support.length, 0);
   const centers = new Map(records.filter((record) => record.kind === "partner" && record.id).map((record) => [record.id, record.title]));
   const owner = people.length === 1 ? people[0].email : undefined;
+
+  async function exportReport() {
+    setExporting(true);
+    setExportError("");
+    try {
+      const { weeklyWorkWorkbook } = await import("./weekly-work-export");
+      const workbook = await weeklyWorkWorkbook(summaries, centers, week, to, day);
+      const url = URL.createObjectURL(workbook);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `fastgo-bao-cao-tuan-${week}-den-${to}.xlsx`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch {
+      setExportError("Chưa xuất được báo cáo Excel. Hãy thử lại.");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return <>
     <section className="panel policy">
-      <h2>Tổng hợp công việc tuần</h2>
-      <p>Từ {dateLabel(week)} đến {dateLabel(to)}{to > day && " · Hoạt động được ghi nhận tới " + dateLabel(day)}.</p>
+      <div className="sectionHead">
+        <div><h2>Tổng hợp công việc tuần</h2>
+          <p>Từ {dateLabel(week)} đến {dateLabel(to)}{to > day && " · Hoạt động được ghi nhận tới " + dateLabel(day)}.</p></div>
+        <button type="button" className="primary" disabled={exporting || !summaries.length} onClick={exportReport}>
+          {exporting ? "Đang xuất báo cáo…" : "Xuất báo cáo Excel"}
+        </button>
+      </div>
+      {exportError && <p role="alert" className="notice error">{exportError}</p>}
       <div className="toolbar weeklyControls">
         <label>Chọn ngày trong tuần<input type="date" required max={day} value={week} onChange={(event) => {
           if (event.target.value) setWeek(currentWeek(event.target.value));
