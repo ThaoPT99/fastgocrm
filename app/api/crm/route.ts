@@ -39,6 +39,7 @@ const recordInput = z.object({
   date: z.string().date(),
   partner: z.string().trim().max(180),
   province: z.string().trim().max(100).nullable().optional(),
+  partnerType: z.enum(["student", "collaborator", "organization", "teacher"]).nullish(),
   partnerId: z.string().uuid().nullish(),
   intakeChecklist: z.object({
     residence: z.enum(["", "household", "residence"]),
@@ -544,6 +545,8 @@ export async function POST(request: Request) {
   const { id, version, ...record } = input.data;
   if (record.kind !== "partner") delete record.province;
   else if (record.province === "") record.province = null;
+  if (record.kind !== "partner") delete record.partnerType;
+  else record.partnerType ??= "organization";
   if (record.kind !== "intake") delete record.intakeChecklist;
   if (!permitted.includes(record.owner)) return json({ error: "Bạn không có quyền giao cho nhân sự này." }, 403);
   if (record.kind === "logwork" && record.owner !== ctx.email) {

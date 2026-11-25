@@ -22,10 +22,11 @@ import { PartnerSupport, SituationGuide } from "./partner-tools";
 import type { Playbook, SupportRequest } from "./sales-workflow";
 import WorkNextSteps from "./work-next-steps";
 import { NextStepEditor } from "./next-step";
+import { partnerTypes, type PartnerType } from "./partner-types";
 import TeamDirectory, { type Team } from "./team-directory";
 
 type Member = { email: string; name: string; team: string; role: Role };
-type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; province?: string | null; partnerId?: string | null; notes: string; nextOwner?: NextOwner | null; nextParty?: string | null; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
+type Entry = { id?: string; version?: number; kind: Kind; title: string; owner: string; status: string; date: string; partner: string; province?: string | null; partnerType?: PartnerType | null; partnerId?: string | null; notes: string; nextOwner?: NextOwner | null; nextParty?: string | null; followupDate?: string | null; followupAction?: string | null; loggedAt?: string | null; performedBy?: string | null; intakeChecklist?: IntakeChecklist | null };
 type Data = { members: Member[]; teamDirectory?: Team[]; records: Entry[]; plans: (KpiPlan & { owner: string })[]; support: SupportRequest[]; supportContacts: Member[]; guides: Playbook[]; admin: boolean; ownerAdmin: boolean; salesMode: boolean; role: Role; email: string; demoCleared: boolean; partnersLinked: boolean; followupsReady: boolean; codeEmails: string[]; intakeCenters?: { id: string; title: string; owner: string }[] };
 type View = "overview" | "workday" | "people" | "teams" | "kpi" | "plan" | "guide" | Kind;
 
@@ -53,7 +54,7 @@ const descriptions: Record<View, string> = {
   activity: "Xem lịch sử liên hệ với đối tác.",
 };
 const kinds = Object.keys(categories) as Kind[];
-const itemLabels: Record<Kind, string> = { partner: "trung tâm", task: "công việc", activity: "lượt liên hệ", meeting: "lịch hẹn", intake: "hồ sơ", logwork: "nhật ký" };
+const itemLabels: Record<Kind, string> = { partner: "khách hàng / đối tác", task: "công việc", activity: "lượt liên hệ", meeting: "lịch hẹn", intake: "hồ sơ", logwork: "nhật ký" };
 const emptyMember: Member = { email: "", name: "", role: "sale", team: "" };
 const salesModeKey = "fastgo-work-as-sales";
 function crmHeaders(json = false) {
@@ -85,6 +86,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const [centerOrigin, setCenterOrigin] = useState<View>();
   const [updatingCenter, setUpdatingCenter] = useState(false);
   const [followupDraft, setFollowupDraft] = useState<{ value: FollowupUpdate; revision: number }>();
+  const [partnerTypeFilter, setPartnerTypeFilter] = useState<PartnerType | "">("");
   const [followupFilter, setFollowupFilter] = useState<FollowupFilter>("all");
   const [logDate, setLogDate] = useState(today);
   const [logMode, setLogMode] = useState<"day" | "week">("day");
@@ -243,6 +245,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     setCenterOrigin(undefined);
     setUpdatingCenter(false);
     setFollowupFilter("all");
+    setPartnerTypeFilter("");
     setQuery("");
     setDraft(undefined);
     setPerson(undefined);
@@ -322,6 +325,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const selectedContact = selectedCenter?.id ? latestContact.get(selectedCenter.id) : undefined;
   const lateCenters = centers.filter((center) => followupGroup(center.followupDate, day) === "late");
   const filtered = rows.filter((entry) => entry.kind === view &&
+    (view !== "partner" || !partnerTypeFilter || (entry.partnerType ?? "organization") === partnerTypeFilter) &&
     (view !== "partner" || followupFilter === "all" || followupGroup(entry.followupDate, day) === followupFilter) &&
     [entry.title, linkedCenterName(entry), entry.province, entry.status, people.get(entry.owner)?.name].join(" ").toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi").trim()));
   if (view === "partner") filtered.sort((a, b) => (a.followupDate ?? "9999").localeCompare(b.followupDate ?? "9999"));
@@ -343,7 +347,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   }
 
   function startEntry(kind: Kind, owner: string, partnerId?: string) {
-    setDraft({ kind, owner, partnerId, title: "", status: statuses[kind][0], date: today(), partner: "", notes: "" });
+    setDraft({ kind, owner, partnerId, partnerType: kind === "partner" ? "organization" : undefined, title: "", status: statuses[kind][0], date: today(), partner: "", notes: "" });
   }
   function openFromWorkday(entry: Entry) {
     changeView(entry.kind);
@@ -364,7 +368,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     ?.some((entry) => entry.status === "Cần hỗ trợ")).length;
   const showLogActions = !readOnly && logMembers.some((member) => member.email === data?.email);
   const stats = [
-    { label: "Đối tác B2B", value: rows.filter((r) => r.kind === "partner").length, view: "partner" },
+    { label: "Khách hàng & Đối tác", value: rows.filter((r) => r.kind === "partner").length, view: "partner" },
     { label: "Follow-up quá hạn", value: lateCenters.length, view: "partner", filter: "late" },
     { label: "Lịch hẹn sắp tới", value: rows.filter((r) => r.kind === "meeting" && r.status === "Đã lên lịch" && r.date >= today()).length, view: "meeting" },
     { label: "Hồ sơ đang mở", value: rows.filter((r) => r.kind === "intake" && r.status !== "Hoàn tất").length, view: "intake" },
@@ -457,13 +461,13 @@ export default function Dashboard({ name, initialView }: { name: string; initial
         {data && view === "kpi" && viewRole && viewRole !== "intake" && <KpiPolicy role={viewRole} />}
         {data && view === "workday" && <>
           {!readOnly && !centers.length && <section className="panel">
-            <h2>Thêm trung tâm bạn định liên hệ</h2>
+            <h2>Thêm người hoặc đơn vị bạn định liên hệ</h2>
             <p>Sau khi lưu, bạn có thể đặt ngày liên hệ hoặc ghi lại cuộc trao đổi đã diễn ra.</p>
             <button className="primary" onClick={() => {
               changeView("partner");
               setCenterOrigin("workday");
               startEntry("partner", data.email);
-            }}>Thêm trung tâm đầu tiên</button>
+            }}>Thêm khách hàng / đối tác đầu tiên</button>
           </section>}
           {centers.length > 0 && <WorkNextSteps day={day} centers={centers} open={(id) => openCenter(id)} />}
           {centers.length > 0 && <ContactPriorities day={day} centers={centers} records={rows}
@@ -480,7 +484,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             <div className="rowActions">
               <button onClick={() => changeView("plan")}>Kế hoạch KPI quý</button>
               <button onClick={() => changeView("logwork")}>Nhật ký làm việc</button>
-              {!readOnly && centers.length > 0 && <button className="primary" onClick={() => { changeView("partner"); startEntry("partner", data.email); }}>+ Thêm trung tâm</button>}
+              {!readOnly && centers.length > 0 && <button className="primary" onClick={() => { changeView("partner"); startEntry("partner", data.email); }}>+ Thêm khách hàng / đối tác</button>}
             </div>
           </div>
           <DailyGreeting name={roster.find((member) => member.email === data.email)?.name ?? name} day={day} />
@@ -618,7 +622,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           </tbody></table></div>
         </section>}
         {data && view === "partner" && selectedCenter && <section className="panel">
-          <div className="sectionHead"><div><div className="eyebrow">HỒ SƠ TRUNG TÂM</div><h2 ref={centerHeading} tabIndex={-1}>{selectedCenter.title}</h2><p>{people.get(selectedCenter.owner)?.name} · {selectedCenter.status}</p><p>Tỉnh/thành phố · {selectedCenter.province || "Chưa cập nhật"}</p></div>
+          <div className="sectionHead"><div><div className="eyebrow">KHÁCH HÀNG / ĐỐI TÁC</div><h2 ref={centerHeading} tabIndex={-1}>{selectedCenter.title}</h2><p>{people.get(selectedCenter.owner)?.name} · {selectedCenter.status}</p><p>{partnerTypes[selectedCenter.partnerType ?? "organization"]}</p><p>Tỉnh/thành phố · {selectedCenter.province || "Chưa cập nhật"}</p></div>
             <div className="rowActions"><button onClick={() => {
               if (centerOrigin) changeView(centerOrigin);
               else { setCenterId(undefined); setUpdatingCenter(false); }
@@ -680,6 +684,11 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               setUpdatingCenter(false);
               startEntry(view as Kind, owner);
             }}>+ Thêm {itemLabels[view as Kind]}</button>}</div>}
+          {view === "partner" && !firstCenterDraft && <label>Nhóm khách hàng / đối tác<select value={partnerTypeFilter}
+            onChange={(event) => setPartnerTypeFilter(event.target.value as PartnerType | "")}>
+            <option value="">Tất cả nhóm</option>
+            {Object.entries(partnerTypes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+          </select></label>}
           {view === "partner" && !firstCenterDraft && <div className="followupFilters" aria-label="Lọc follow-up">
             {(Object.keys(followupFilters) as FollowupFilter[]).map((key) => <button key={key} aria-pressed={key === followupFilter} onClick={() => setFollowupFilter(key)}>
               {followupFilters[key]} <b>{key === "all" ? centers.length : centers.filter((center) => followupGroup(center.followupDate, day) === key).length}</b>
@@ -687,9 +696,13 @@ export default function Dashboard({ name, initialView }: { name: string; initial
           </div>}
           {!visible.length && !readOnly && !intakeOnly && <div className="empty"><p>Cần có nhân sự phụ trách trước khi thêm bản ghi.</p>{managing && <button onClick={() => { changeView("people"); setPerson(emptyMember); }}>Thêm nhân sự</button>}</div>}
           {intakeOnly && !readOnly && !intakeCenters.length && <p className="empty">Cần có trung tâm B2B trước khi tạo hồ sơ tiếp nhận.</p>}
-          {firstCenterDraft && <h2>Thêm trung tâm đầu tiên</h2>}
-          {draft && <form className="form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save({ action: "record", record: draft }, draft.kind === "partner" ? "Đã lưu trung tâm." : "Đã lưu bản ghi."); }}>
-            <label>{draft.kind === "logwork" ? draft.id && !draft.loggedAt ? "Việc tiếp theo" : "Hoạt động đã làm" : draft.kind === "partner" ? "Tên trung tâm" : draft.kind === "intake" ? "Tên học sinh / mã hồ sơ" : "Tiêu đề"}<input ref={titleField} required maxLength={180} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
+          {firstCenterDraft && <h2>Thêm khách hàng / đối tác đầu tiên</h2>}
+          {draft && <form className="form" onSubmit={(event: FormEvent) => { event.preventDefault(); void save({ action: "record", record: draft }, draft.kind === "partner" ? "Đã lưu khách hàng / đối tác." : "Đã lưu bản ghi."); }}>
+            {draft.kind === "partner" && <label>Nhóm khách hàng / đối tác<select value={draft.partnerType ?? "organization"}
+              onChange={(event) => setDraft({ ...draft, partnerType: event.target.value as PartnerType })}>
+              {Object.entries(partnerTypes).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </select></label>}
+            <label>{draft.kind === "logwork" ? draft.id && !draft.loggedAt ? "Việc tiếp theo" : "Hoạt động đã làm" : draft.kind === "partner" ? draft.partnerType === "student" ? "Tên học sinh" : draft.partnerType === "collaborator" ? "Tên cộng tác viên" : draft.partnerType === "teacher" ? "Tên giáo viên" : "Tên đơn vị" : draft.kind === "intake" ? "Tên học sinh / mã hồ sơ" : "Tiêu đề"}<input ref={titleField} required maxLength={180} value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></label>
             {draft.kind === "partner" && <label>Tỉnh/thành phố<input maxLength={100} value={draft.province ?? ""}
               onChange={(event) => setDraft({ ...draft, province: event.target.value })} /></label>}
             {!firstCenterDraft && <>
@@ -697,7 +710,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             <label>Trạng thái<select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value })}>{statuses[draft.kind].map((status) => <option key={status}>{status}</option>)}</select></label>
             <label>{draft.kind === "task" ? "Hạn xử lý" : "Ngày"}<input type="date" readOnly={draft.kind === "logwork"} required value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })} /></label>
             </>}
-            {intakeOnly ? <label>Trung tâm B2B{draft.id ? <input value={linkedCenterName(draft)} readOnly />
+            {intakeOnly ? <label>Khách hàng / đối tác{draft.id ? <input value={linkedCenterName(draft)} readOnly />
               : <select required value={draft.partnerId ?? ""} onChange={(event) => {
                 const center = intakeCenters.find((item) => item.id === event.target.value);
                 setDraft({ ...draft, partnerId: center?.id, owner: center?.owner ?? "" });
@@ -705,20 +718,20 @@ export default function Dashboard({ name, initialView }: { name: string; initial
                 <option value="">Chọn trung tâm đã có</option>
                 {intakeCenters.map((center) => <option key={center.id} value={center.id}>{center.title} · {people.get(center.owner)?.name}</option>)}
               </select>}</label>
-            : needsPartner(draft.kind) ? <label>Trung tâm B2B
+            : needsPartner(draft.kind) ? <label>Khách hàng / đối tác
               <select required value={draft.partnerId ?? ""} onChange={(event) => setDraft({ ...draft, partnerId: event.target.value || undefined })}>
                 <option value="">Chọn trung tâm đã có</option>
                 {centers.filter((center) => center.owner === draft.owner).map((center) => <option key={center.id} value={center.id}>{center.title}</option>)}
               </select>
               {draft.partner && !draft.partnerId && <small>Tên trung tâm đã nhập trước đây: {draft.partner}</small>}
-              {!centers.some((center) => center.owner === draft.owner) && <small>Người phụ trách chưa có trung tâm. Hãy thêm trung tâm trong mục Đối tác B2B trước.</small>}
+              {!centers.some((center) => center.owner === draft.owner) && <small>Người phụ trách chưa có trung tâm. Hãy thêm trung tâm trong mục Khách hàng & Đối tác trước.</small>}
             </label> : <label>{draft.kind === "logwork" ? "Vướng mắc / cần hỗ trợ" : "Đầu mối liên hệ"}<input required={draft.kind === "logwork" && draft.status === "Cần hỗ trợ"} maxLength={180} value={draft.partner} onChange={(e) => setDraft({ ...draft, partner: e.target.value })} /></label>}
             <label>{draft.kind === "logwork" ? "Kết quả / ghi chú" : "Ghi chú"}<textarea maxLength={4000} rows={3} value={draft.notes} onChange={(e) => setDraft({ ...draft, notes: e.target.value })} /></label>
             {draft.kind === "intake" && <IntakeChecklistFields value={draft.intakeChecklist} onChange={(value) => setDraft({ ...draft, intakeChecklist: value })} />}
             <div className="actions"><button type="button" disabled={busy} onClick={() => {
               if (firstCenterDraft && centerOrigin) changeView(centerOrigin);
               else setDraft(undefined);
-            }}>Hủy</button><button className="primary" disabled={busy}>{draft.kind === "intake" ? "Lưu hồ sơ" : draft.kind === "partner" ? "Lưu trung tâm" : "Lưu bản ghi"}</button></div>
+            }}>Hủy</button><button className="primary" disabled={busy}>{draft.kind === "intake" ? "Lưu hồ sơ" : draft.kind === "partner" ? "Lưu khách hàng / đối tác" : "Lưu bản ghi"}</button></div>
           </form>}
           {view !== "logwork" && !firstCenterDraft && <div className="tableWrap mobileCards"><table role="table"><thead><tr><th>{view === "partner" ? "Trung tâm" : view === "intake" ? "Hồ sơ học sinh" : "Tiêu đề"}</th><th>Phụ trách</th><th>{view === "partner" ? "Follow-up tiếp theo" : "Ngày"}</th><th>Trạng thái</th>{!readOnly && <th>Thao tác</th>}</tr></thead><tbody>
           {filtered.map((entry) => {
@@ -727,6 +740,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
             return <tr key={entry.id}><td>
             {entry.kind === "partner" ? <button className="textButton" onClick={() => openCenter(entry.id)}>{entry.title}</button> : <b>{entry.title}</b>}
             {entry.kind === "partner" && <small>{nextOwners[nextOwnerOf(entry)]}{entry.nextParty && " · " + entry.nextParty}</small>}
+            {entry.kind === "partner" && <small>{partnerTypes[entry.partnerType ?? "organization"]}</small>}
             {entry.kind === "partner" && entry.province && <small>{entry.province}</small>}
             {entry.partnerId ? <small>{intakeOnly ? linkedCenterName(entry) : <button className="textButton" onClick={() => openCenter(entry.partnerId ?? undefined)}>{linkedCenterName(entry)}</button>}</small> :
               needsPartner(entry.kind) ? <small>Chưa liên kết trung tâm{entry.partner && " · " + entry.partner}</small> : entry.partner && <small>{entry.partner}</small>}

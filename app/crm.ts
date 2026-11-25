@@ -1,5 +1,5 @@
 export const categories = {
-  partner: "Đối tác B2B",
+  partner: "Khách hàng & Đối tác",
   task: "Công việc",
   activity: "Nhật ký liên hệ",
   meeting: "Lịch hẹn",

@@ -33,6 +33,7 @@ export const records = sqliteTable("records", {
   date: text().notNull(),
   partner: text().notNull(),
   province: text(),
+  partnerType: text("partner_type", { enum: ["student", "collaborator", "organization", "teacher"] }),
   partnerId: text("partner_id").references((): AnySQLiteColumn => records.id, { onDelete: "restrict" }),
   followupDate: text("followup_date"),
   followupAction: text("followup_action"),
