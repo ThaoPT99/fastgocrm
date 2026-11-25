@@ -87,6 +87,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const [updatingCenter, setUpdatingCenter] = useState(false);
   const [followupDraft, setFollowupDraft] = useState<{ value: FollowupUpdate; revision: number }>();
   const [partnerTypeFilter, setPartnerTypeFilter] = useState<PartnerType | "">("");
+  const [partnerOwnerFilter, setPartnerOwnerFilter] = useState("");
   const [followupFilter, setFollowupFilter] = useState<FollowupFilter>("all");
   const [logDate, setLogDate] = useState(today);
   const [logMode, setLogMode] = useState<"day" | "week">("day");
@@ -246,6 +247,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
     setUpdatingCenter(false);
     setFollowupFilter("all");
     setPartnerTypeFilter("");
+    setPartnerOwnerFilter("");
     setQuery("");
     setDraft(undefined);
     setPerson(undefined);
@@ -325,6 +327,7 @@ export default function Dashboard({ name, initialView }: { name: string; initial
   const selectedContact = selectedCenter?.id ? latestContact.get(selectedCenter.id) : undefined;
   const lateCenters = centers.filter((center) => followupGroup(center.followupDate, day) === "late");
   const filtered = rows.filter((entry) => entry.kind === view &&
+    (view !== "partner" || viewRole !== "head" || !partnerOwnerFilter || entry.owner === partnerOwnerFilter) &&
     (view !== "partner" || !partnerTypeFilter || (entry.partnerType ?? "organization") === partnerTypeFilter) &&
     (view !== "partner" || followupFilter === "all" || followupGroup(entry.followupDate, day) === followupFilter) &&
     [entry.title, linkedCenterName(entry), entry.province, entry.status, people.get(entry.owner)?.name].join(" ").toLocaleLowerCase("vi").includes(query.toLocaleLowerCase("vi").trim()));
@@ -684,6 +687,13 @@ export default function Dashboard({ name, initialView }: { name: string; initial
               setUpdatingCenter(false);
               startEntry(view as Kind, owner);
             }}>+ Thêm {itemLabels[view as Kind]}</button>}</div>}
+          {view === "partner" && !firstCenterDraft && viewRole === "head" && <label>Nhân sự phụ trách<select value={partnerOwnerFilter}
+            onChange={(event) => setPartnerOwnerFilter(event.target.value)}>
+            <option value="">Tất cả nhân sự</option>
+            {visible.filter((member) => member.role !== "intake").map((member) => <option key={member.email} value={member.email}>
+              {member.name}{member.team ? " · " + member.team : ""}
+            </option>)}
+          </select></label>}
           {view === "partner" && !firstCenterDraft && <label>Nhóm khách hàng / đối tác<select value={partnerTypeFilter}
             onChange={(event) => setPartnerTypeFilter(event.target.value as PartnerType | "")}>
             <option value="">Tất cả nhóm</option>
